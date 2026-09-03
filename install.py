@@ -23,6 +23,41 @@ COMPONENTS = (
 )
 MARKITDOWN_SPEC = "markitdown[docx,pdf,pptx,xlsx]==0.1.6"
 MARKITDOWN_INSTALL_TIMEOUT_SECONDS = 600
+SHARED_REQUIRED_FILES = (
+    "__init__.py",
+    "adapter.py",
+    "configure_content_koubo_slim.py",
+    "configure_content_source.py",
+    "content_koubo_slim_handoff.py",
+    "content_source_contract.py",
+    "contracts.md",
+    "contracts.py",
+    "evidence.py",
+    "fake_adapter.py",
+    "feishu_adapter.py",
+    "feishu_cli.py",
+    "feishu_stage5.py",
+    "markdown_converter.py",
+    "naming.py",
+    "obsidian_adapter.py",
+    "obsidian_stage6.py",
+    "ocr_provider.py",
+    "page_renderer.py",
+    "page_text.py",
+    "stage11_bootstrap.py",
+    "stage2_router.py",
+    "stage5_intake.py",
+    "stage6_knowledge.py",
+    "stage7_method.py",
+    "stage8_profile.py",
+    "templates.py",
+)
+PACKAGE_REQUIRED_FILES = ("README.md", "install.py", "requirements-markitdown.txt")
+PACKAGE_SCHEMA_FILES = (
+    "content-profile-index.schema.json",
+    "content-source-manifest.schema.json",
+    "knowledge-base-registry.schema.json",
+)
 MAC_POWERPOINT = Path("/Applications/Microsoft PowerPoint.app")
 WINDOWS_POWERPOINT_DETECTION_SCRIPT = (
     "$powerPointType=[type]::GetTypeFromProgID('PowerPoint.Application');"
@@ -45,18 +80,25 @@ def validate_source(source_root: Path) -> list[str]:
             errors.append(f"缺少组件目录：{component}")
         if name != "shared" and not (component / "SKILL.md").is_file():
             errors.append(f"缺少 Skill 入口：{component / 'SKILL.md'}")
-    if not (source_root / "shared" / "markdown_converter.py").is_file():
-        errors.append("缺少统一 Markdown 转换模块：shared/markdown_converter.py")
-    if not (source_root / "shared" / "page_renderer.py").is_file():
-        errors.append("缺少可选页级证据模块：shared/page_renderer.py")
-    if not (source_root / "shared" / "content_koubo_slim_handoff.py").is_file():
-        errors.append("缺少 Content 口播 Slim 配置交接模块：shared/content_koubo_slim_handoff.py")
-    if not (source_root / "shared" / "configure_content_koubo_slim.py").is_file():
-        errors.append("缺少 Content 口播 Slim 配置交接入口：shared/configure_content_koubo_slim.py")
-    if not (source_root / "shared" / "content_source_contract.py").is_file():
-        errors.append("缺少 content-source-v1 公共合同：shared/content_source_contract.py")
-    if not (source_root / "shared" / "configure_content_source.py").is_file():
-        errors.append("缺少公共 Content 配置入口：shared/configure_content_source.py")
+    for name in SHARED_REQUIRED_FILES:
+        if not (source_root / "shared" / name).is_file():
+            errors.append(f"缺少 shared 必需模块：shared/{name}")
+    return errors
+
+
+def validate_package(package_root: Path) -> list[str]:
+    errors: list[str] = []
+    for name in PACKAGE_REQUIRED_FILES:
+        if not (package_root / name).is_file():
+            errors.append(f"缺少安装包必需文件：{name}")
+    for name in PACKAGE_SCHEMA_FILES:
+        if not (package_root / "schemas" / name).is_file():
+            errors.append(f"缺少合同 Schema：schemas/{name}")
+    skills_root = package_root / "skills"
+    if not skills_root.is_dir():
+        errors.append("缺少安装包组件目录：skills")
+    else:
+        errors.extend(validate_source(skills_root))
     return errors
 
 
@@ -66,10 +108,7 @@ def installed_state(destination: Path) -> tuple[list[str], list[str]]:
     for name in COMPONENTS:
         target = destination / name
         valid = target.is_dir() and (
-            (target / "markdown_converter.py").is_file()
-            and (target / "page_renderer.py").is_file()
-            and (target / "content_koubo_slim_handoff.py").is_file()
-            and (target / "configure_content_koubo_slim.py").is_file()
+            all((target / required).is_file() for required in SHARED_REQUIRED_FILES)
             if name == "shared" else (target / "SKILL.md").is_file()
         )
         (present if valid else missing).append(name)
@@ -148,6 +187,74 @@ def page_evidence_status() -> dict[str, bool | str | None]:
     else:
         ppt_engine = None
     return {"pdf": pdf_ready, "pptx": bool(pdf_ready and ppt_engine), "pptx_engine": ppt_engine}
+
+
+def tesseract_executable() -> str | None:
+    executable = shutil.which("tesseract")
+    if executable:
+        return executable
+    if platform.system() != "Windows":
+        return None
+    roots = tuple(
+        Path(value)
+        for key in ("ProgramFiles", "ProgramFiles(x86)")
+        if (value := os.environ.get(key))
+    )
+    for root in roots:
+        candidate = root / "Tesseract-OCR" / "tesseract.exe"
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def tessdata_directory() -> Path | None:
+    candidates: list[Path] = []
+    configured = os.environ.get("TESSDATA_PREFIX")
+    if configured:
+        candidates.append(Path(configured))
+    user_profile = os.environ.get("USERPROFILE")
+    if user_profile:
+        candidates.append(Path(user_profile) / ".codex" / "ocr" / "tessdata")
+    for candidate in candidates:
+        if (
+            (candidate / "chi_sim.traineddata").is_file()
+            and (candidate / "eng.traineddata").is_file()
+            and (candidate / "configs" / "tsv").is_file()
+        ):
+            return candidate
+    return None
+
+
+def local_ocr_status() -> dict[str, bool | str | tuple[str, ...] | None]:
+    executable = tesseract_executable()
+    if not executable:
+        return {"ready": False, "engine": None, "languages": ()}
+    try:
+        directory = tessdata_directory()
+        command = (
+            (executable, "--tessdata-dir", str(directory), "--list-langs")
+            if directory
+            else (executable, "--list-langs")
+        )
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+            shell=False,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {"ready": False, "engine": "Tesseract", "languages": ()}
+    raw = completed.stdout + "\n" + completed.stderr
+    languages = tuple(sorted({line.strip() for line in raw.splitlines() if line.strip() in {"chi_sim", "eng"}}))
+    return {
+        "ready": completed.returncode == 0 and {"chi_sim", "eng"}.issubset(languages),
+        "engine": "Tesseract",
+        "languages": languages,
+    }
 
 
 def _mac_powerpoint_ready() -> bool:
@@ -241,8 +348,21 @@ def main() -> int:
     parser.add_argument("--dest", type=Path, default=default_destination(), help="目标 Skills 目录")
     parser.add_argument("--check", action="store_true", help="只检查目标目录，不写入")
     parser.add_argument("--doctor", action="store_true", help="检查完整组件与 MarkItDown 转换器，不写入")
+    parser.add_argument("--package-check", action="store_true", help="检查当前安装包结构，不写入")
     parser.add_argument("--install-markitdown", action="store_true", help="安装或补齐 MarkItDown 最小格式依赖")
     args = parser.parse_args()
+
+    if args.package_check:
+        package_root = Path(__file__).resolve().parent
+        errors = validate_package(package_root)
+        print(f"检查安装包：{package_root}")
+        if errors:
+            print("安装包不完整：", file=sys.stderr)
+            for error in errors:
+                print(f"- {error}", file=sys.stderr)
+            return 1
+        print("安装包结构：完整")
+        return 0
 
     destination = args.dest.expanduser().resolve()
     if args.check:
@@ -256,10 +376,13 @@ def main() -> int:
         present, missing = installed_state(destination)
         version = converter_version()
         pages = page_evidence_status()
+        ocr = local_ocr_status()
         print("组件：" + ("齐全" if not missing else "缺少 " + "、".join(missing)))
         print("MarkItDown：" + (version or "不可用"))
         pptx_state = "不可用" if not pages["pptx"] else f"可用（{pages['pptx_engine']}）"
         print("页级证据（可选）：PDF " + ("可用" if pages["pdf"] else "不可用") + "；PPTX " + pptx_state)
+        language_text = "+".join(ocr["languages"]) if ocr["languages"] else "无"
+        print("本地 OCR（页级证据增强）：" + (f"可用（{ocr['engine']}；{language_text}）" if ocr["ready"] else f"不可用（语言：{language_text}）"))
         return 0 if not missing and version else 1
 
     source_root = Path(__file__).resolve().parent / "skills"

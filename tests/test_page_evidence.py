@@ -15,11 +15,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills"))
 
-from shared.contracts import BINDING_SCHEMA, ROOT_KEYS, SOURCE_SCHEMA, Binding, PageArtifact, SourceRecord  # noqa: E402
+from shared.contracts import BINDING_SCHEMA, ROOT_KEYS, SOURCE_SCHEMA, Binding, KnowledgeFact, PageArtifact, SourceRecord  # noqa: E402
 from shared.fake_adapter import FakeAdapter  # noqa: E402
 from shared.feishu_cli import RecordedCliCall, RecordedCliRunner  # noqa: E402
 from shared.feishu_stage5 import FeishuStage5Storage  # noqa: E402
 from shared.markdown_converter import MarkdownConversion  # noqa: E402
+from shared.ocr_provider import OcrResult  # noqa: E402
 from shared.obsidian_adapter import ObsidianAdapter  # noqa: E402
 from shared import page_renderer  # noqa: E402
 from shared.page_renderer import PageRenderFailed, PageRendererUnavailable, RenderedPage, RenderedPages  # noqa: E402
@@ -30,6 +31,27 @@ from shared.templates import TEMPLATE_VERSION  # noqa: E402
 
 TASK_ID = "01a01e29-a6ba-73a2-82e6-4ad1caa0f33b"
 PNG = b"\x89PNG\r\n\x1a\nsynthetic-page"
+
+
+class HighConfidenceOcr:
+    name = "test-local-ocr"
+
+    def recognize(self, _image: bytes) -> OcrResult:
+        return OcrResult("页图文字", 0.99, self.name)
+
+
+class LowConfidenceOcr:
+    name = "test-low-confidence-ocr"
+
+    def recognize(self, _image: bytes) -> OcrResult:
+        return OcrResult("不可靠文字", 0.42, self.name)
+
+
+class SensitiveOcr:
+    name = "test-sensitive-ocr"
+
+    def recognize(self, _image: bytes) -> OcrResult:
+        return OcrResult("联系人 13800138000 test@example.com", 0.99, self.name)
 
 
 def binding(backend: str = "obsidian", locator: str | None = None) -> Binding:
@@ -54,6 +76,8 @@ def rendered(payload: bytes = PNG) -> RenderedPages:
         1,
         "page-001.png",
         hashlib.sha256(payload).hexdigest(),
+        1600,
+        900,
     )
     return RenderedPages((RenderedPage(artifact, payload),), 1, "pdftoppm")
 
@@ -78,7 +102,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
     def test_required_pages_are_registered_with_persistent_manifest(self, convert, render) -> None:
         convert.return_value = MarkdownConversion("# PDF\n", "markitdown", "0.1.6")
         render.return_value = rendered()
-        response = Stage5Intake(self.adapter).execute(
+        response = Stage5Intake(self.adapter, HighConfidenceOcr()).execute(
             IntakeRequest(
                 TASK_ID,
                 self.binding,
@@ -99,10 +123,70 @@ class PageEvidenceIntakeTests(unittest.TestCase):
 
     @mock.patch("shared.stage5_intake.render_page_evidence")
     @mock.patch("shared.stage5_intake.convert_to_markdown")
+    def test_ocr_only_sensitive_text_is_redacted_before_any_write(self, convert, render) -> None:
+        convert.return_value = MarkdownConversion("# 普通正文\n", "markitdown", "0.1.6")
+        render.return_value = rendered()
+        response = Stage5Intake(self.adapter, SensitiveOcr()).execute(
+            IntakeRequest(
+                TASK_ID,
+                self.binding,
+                "资料.pdf",
+                b"pdf",
+                "资料",
+                original_retention_approved=True,
+                page_evidence_mode="required",
+            )
+        )
+        self.assertEqual((response.status, response.code), ("registered", None))
+        self.assertEqual(response.record.privacy_status, "redacted")
+        readable = self.adapter._objects[f"source:{response.source_id}:readable"]["payload"].decode("utf-8")
+        self.assertNotIn("13800138000", readable)
+        self.assertNotIn("test@example.com", readable)
+        self.assertIn("[已脱敏]", readable)
+        self.assertEqual(
+            response.evidence["page_text_evidence"]["evidence_sha256"],
+            [item.evidence_sha256 for item in response.record.page_text_evidence],
+        )
+
+    def test_default_intake_allows_processing_but_requires_original_retention_approval(self) -> None:
+        request = IntakeRequest(TASK_ID, self.binding, "资料.pdf", b"pdf", "资料")
+        self.assertEqual(request.permission_status, "allowed")
+        self.assertFalse(request.original_retention_approved)
+
+    @mock.patch("shared.stage5_intake.render_page_evidence")
+    @mock.patch("shared.stage5_intake.convert_to_markdown")
+    def test_low_confidence_page_set_is_rejected_without_any_backend_write(self, convert, render) -> None:
+        convert.return_value = MarkdownConversion("# PDF\n", "markitdown", "0.1.6")
+        render.return_value = rendered()
+        response = Stage5Intake(self.adapter, LowConfidenceOcr()).execute(
+            IntakeRequest(
+                TASK_ID,
+                self.binding,
+                "资料.pdf",
+                b"pdf",
+                "资料",
+                original_retention_approved=True,
+                page_evidence_mode="required",
+            )
+        )
+        self.assertEqual((response.status, response.code), ("exception", "file_quality_insufficient"))
+        self.assertNotIn("store_original", self.adapter.calls)
+        self.assertNotIn("write_exception", self.adapter.calls)
+
+    @mock.patch("shared.stage5_intake.render_page_evidence")
+    @mock.patch("shared.stage5_intake.convert_to_markdown")
     def test_page_rendering_never_starts_before_retention_approval(self, convert, render) -> None:
         convert.return_value = MarkdownConversion("# PDF\n", "markitdown", "0.1.6")
         response = Stage5Intake(self.adapter).execute(
-            IntakeRequest(TASK_ID, self.binding, "资料.pdf", b"pdf", "资料", page_evidence_mode="required")
+            IntakeRequest(
+                TASK_ID,
+                self.binding,
+                "资料.pdf",
+                b"pdf",
+                "资料",
+                original_retention_approved=False,
+                page_evidence_mode="required",
+            )
         )
         self.assertEqual((response.status, response.code), ("exception", "privacy_approval_required"))
         render.assert_not_called()
@@ -136,7 +220,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
             adapter = ObsidianAdapter()
             adapter.resolve_binding(active_binding)
             adapter.create_skeleton(active_binding)
-            response = Stage5Intake(adapter).execute(
+            response = Stage5Intake(adapter, HighConfidenceOcr()).execute(
                 IntakeRequest(
                     TASK_ID,
                     active_binding,
@@ -156,8 +240,17 @@ class PageEvidenceIntakeTests(unittest.TestCase):
             self.assertEqual(adapter.read_back(active_binding, response.refs).status, "ok")
             fresh_adapter = ObsidianAdapter()
             fresh_adapter.resolve_binding(active_binding)
+            text_evidence = response.record.page_text_evidence[0]
             routed = Stage6Knowledge(fresh_adapter).execute(
-                KnowledgeRequest(TASK_ID, active_binding, response.record, "资料知识", "通用资料", "来源已经完整登记。")
+                KnowledgeRequest(
+                    TASK_ID,
+                    active_binding,
+                    response.record,
+                    "资料知识",
+                    "通用资料",
+                    "来源已经完整登记。",
+                    fact_evidence=(KnowledgeFact("来源已经完整登记。", 1, "页图文字", text_evidence.evidence_sha256),),
+                )
             )
             self.assertEqual((routed.status, routed.code), ("registered", None))
 
@@ -182,7 +275,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
             ) as render:
                 convert.return_value = MarkdownConversion("# PDF\n", "markitdown", "0.1.6")
                 render.return_value = rendered()
-                first = Stage5Intake(first_adapter).execute(request)
+                first = Stage5Intake(first_adapter, HighConfidenceOcr()).execute(request)
             self.assertEqual((first.status, first.code), ("registered", None))
             before = file_snapshot(folder)
 
@@ -200,8 +293,29 @@ class PageEvidenceIntakeTests(unittest.TestCase):
             self.assertEqual((reused.status, reused.code), ("reused", None))
             self.assertEqual(reused.evidence["existing_layout_reused"], "human_named")
             self.assertEqual(reused.record.source_id, first.source_id)
+            self.assertEqual(reused.record.page_text_evidence, first.record.page_text_evidence)
             self.assertEqual(reused.refs, first.refs)
             self.assertIn(f"/{first.record.display_name}/页面证据/第001页.png", reused.refs[-1].locator)
+            text_evidence = reused.record.page_text_evidence[0]
+            routed = Stage6Knowledge(fresh_adapter).execute(
+                KnowledgeRequest(
+                    TASK_ID,
+                    active_binding,
+                    reused.record,
+                    "资料知识",
+                    "通用资料",
+                    "来源已经完整登记。",
+                    fact_evidence=(
+                        KnowledgeFact(
+                            "来源已经完整登记。",
+                            1,
+                            "页图文字",
+                            text_evidence.evidence_sha256,
+                        ),
+                    ),
+                )
+            )
+            self.assertEqual((routed.status, routed.code), ("registered", None))
             self.assertEqual(before, after)
 
     def test_fresh_obsidian_reuse_rejects_another_client_without_writes(self) -> None:
@@ -339,7 +453,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
                 "shared.stage5_intake.convert_to_markdown",
                 return_value=MarkdownConversion("# PDF\n", "markitdown", "0.1.6"),
             ), mock.patch("shared.stage5_intake.render_page_evidence", return_value=rendered()):
-                first = Stage5Intake(first_adapter).execute(approved)
+                first = Stage5Intake(first_adapter, HighConfidenceOcr()).execute(approved)
             self.assertEqual((first.status, first.code), ("registered", None))
             fresh_adapter = ObsidianAdapter()
             fresh_adapter.resolve_binding(active_binding)
@@ -375,7 +489,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
                 "shared.stage5_intake.convert_to_markdown",
                 return_value=MarkdownConversion("# PDF\n", "markitdown", "0.1.6"),
             ), mock.patch("shared.stage5_intake.render_page_evidence", return_value=rendered()):
-                first = Stage5Intake(first_adapter).execute(approved)
+                first = Stage5Intake(first_adapter, HighConfidenceOcr()).execute(approved)
             self.assertEqual((first.status, first.code), ("registered", None))
 
             fresh_adapter = ObsidianAdapter()
@@ -436,7 +550,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
                 "shared.stage5_intake.convert_to_markdown",
                 return_value=MarkdownConversion("# PDF\n", "markitdown", "0.1.6"),
             ), mock.patch("shared.stage5_intake.render_page_evidence", return_value=rendered()):
-                first = Stage5Intake(first_adapter).execute(request)
+                first = Stage5Intake(first_adapter, HighConfidenceOcr()).execute(request)
             readable = next((Path(folder) / "01-来源索引" / first.record.display_name).glob("*-可读版.md"))
             content = readable.read_text(encoding="utf-8")
             content = content.replace(
@@ -476,7 +590,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
                 "shared.stage5_intake.convert_to_markdown",
                 return_value=MarkdownConversion("# PDF\n", "markitdown", "0.1.6"),
             ), mock.patch("shared.stage5_intake.render_page_evidence", return_value=rendered()):
-                first = Stage5Intake(first_adapter).execute(request)
+                first = Stage5Intake(first_adapter, HighConfidenceOcr()).execute(request)
             readable = next((Path(folder) / "01-来源索引" / first.record.display_name).glob("*-可读版.md"))
             content = readable.read_text(encoding="utf-8")
             content = content.replace('"page_number": 1', '"page_number": 2', 1)
@@ -488,7 +602,7 @@ class PageEvidenceIntakeTests(unittest.TestCase):
 
 
 class PageEvidenceStorageTests(unittest.TestCase):
-    def test_feishu_page_name_is_human_readable_and_listed_after_upload(self) -> None:
+    def test_feishu_page_is_not_uploaded_as_a_sibling_drive_file(self) -> None:
         source_id = "SRC-" + hashlib.sha256(b"pdf").hexdigest()[:24]
         page = rendered().pages[0].artifact
         source = SourceRecord(
@@ -511,17 +625,12 @@ class PageEvidenceStorageTests(unittest.TestCase):
             page_artifacts=(page,),
             display_name="2026-08-31 资料",
         )
-        name = "2026-08-31 资料-第001页.png"
         list_call = ("lark-cli", "--as", "user", "wiki", "nodes", "list", "--space-id", "1", "--parent-node-token", "root-01", "--page-all", "--format", "json")
-        upload_call = ("lark-cli", "--as", "user", "drive", "+upload", "--file", "{file}", "--wiki-token", "root-01", "--name", name, "--format", "json")
         runner = RecordedCliRunner((
             RecordedCliCall(list_call, '{"ok":true,"data":{"items":[]}}'),
-            RecordedCliCall(upload_call, '{"ok":true,"data":{"file_token":"token"}}', payload=PNG, upload_name=name),
-            RecordedCliCall(list_call, '{"ok":true,"data":{"items":[{"title":"' + name + '","obj_type":"file","obj_token":"token"}]}}'),
         ))
         result = FeishuStage5Storage(runner, "1", {"01": "root-01", "02": "root-02"}).store_page_evidence(source, page, PNG)
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(result.object_refs[0].object_kind, "source_page")
+        self.assertEqual((result.status, result.code), ("blocked", "ownership_unknown"))
         self.assertTrue(runner.exhausted)
 
     def test_feishu_human_named_source_can_be_found_in_a_fresh_run(self) -> None:
