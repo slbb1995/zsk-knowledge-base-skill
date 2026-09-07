@@ -18,9 +18,27 @@ Content 口播 Slim 与 Content 公众号 Slim 都是独立的知识库消费仓
 
 03 事实卡、04 内容资产和 05 Profile 都带稳定 ID、状态、适用范围与来源回链。一个知识库可以有多个 active Profile，但最多一个 primary；primary 只是默认 IP，不限制用户在口播或公众号任务中选择其他 IP。
 
+## 让一段想法也有资料可用
+
+04 同时保存同行完整内容拆解和结构方法：同行提供问题、观点、场景与细节，结构方法提供选择条件、段落作用和组合方式。ZSK 入库时保留这些内容价值，让下游 Content 工作流在用户没给对标时也能选材、组织和提出方向。客户无需先学习结构名称。
+
+Stage 7 新增 `PeerContentRequest` 七段完整拆解和 `ContentMethodRequest` 多段结构/选择方法接口，继续使用已有 `peer_content_asset` / `content_method_asset` 文件合同。旧 `MethodRequest` 短方法卡及旧知识库保持可用；不自动覆盖已有卡片。详细字段与语义验收见 [04 内容保留与调用合同](skills/zsk-duibiao/references/rich-content-assets.md)。
+
+保留同行细节不代表把同行经历变成客户经历。新卡标记来源归属，具体客户事实仍需 03/05 或本次确认材料支持；原件、权限、隐私、绑定、create-only 保存和回读要求不变。入库回执应说明哪些内容和方法已可供参考、还有什么资料缺口。ZSK 独立安装仍可完成入库，不依赖任何 Content 代码。
+
+维护者可验证真实 Stage 5 → 富内容 Stage 7 → 两个 Content 独立配置器和无对标入口：
+
+```bash
+python3 -B tools/verify_rich_content_handoff.py \
+  --content-koubo-slim-root /本机/content-koubo-slim \
+  --content-gzh-slim-root /本机/content-gzh-slim
+```
+
+该工具只用合成资料和临时 Obsidian，检查七段同行拆解、结构末尾、来源限制、角色预算与共享绑定，止于待分析输入/Run 创建；不读取客户库、不批准人工 Gate、不生成或发布成稿。跨仓调用仅存在于验收工具，产品运行代码仍独立。
+
 ## 与 Content 工作流配合
 
-两套仓库保持独立，推荐顺序是：
+ZSK、口播、公众号三套仓库保持独立，推荐顺序是：
 
 ```text
 先安装 ZSK
@@ -158,7 +176,7 @@ Doctor 未通过时，富文档会准确停止并进入 02；不会静默换用�
 - `zsk-router`：唯一公开入口，识别建库、入库和状态任务。
 - `zsk-ruku`：登记来源、版本、隐私与使用权限。
 - `zsk-zhishi`：把已确认资料整理为业务知识。
-- `zsk-duibiao`：只提炼外部参考的表达方法。
+- `zsk-duibiao`：保留同行完整拆解与可选择、组合的结构方法，明确来源归属。
 - `zsk-profile`：整理主体确认事实、运营设定和候选素材。
 - `markitdown-skill`：必装的 Microsoft MarkItDown 转换说明与运行边界；供 ZSK 后台和独立文档转换复用，不是第二个入库入口。
 - `shared`：以上组件共用的合同、格式读取和飞书／Obsidian 适配代码。
