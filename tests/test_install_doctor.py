@@ -15,6 +15,19 @@ import install  # noqa: E402
 
 
 class InstallDoctorTests(unittest.TestCase):
+    def test_incomplete_oral_structure_package_is_not_an_installed_shared(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / "skills"
+            shutil.copytree(ROOT / "skills", destination, ignore=shutil.ignore_patterns("__pycache__"))
+            preset_root = destination / "shared" / "assets" / "oral-structure-v1"
+            card = next(preset_root.rglob("*.md"))
+            card.unlink()
+            present, missing = install.installed_state(destination)
+            self.assertIn("shared", missing)
+            self.assertNotIn("shared", present)
+            self.assertTrue(any("口播结构" in error for error in install.validate_source(destination)))
+
     def test_shared_requires_the_markdown_converter(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             destination = Path(folder)

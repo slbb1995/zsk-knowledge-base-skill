@@ -1,0 +1,97 @@
+{
+  "schema_version": "zsk-oral-structure-package-v1",
+  "package_id": "oral-structure",
+  "package_version": "1.0.0",
+  "source_archive_sha256": "5e175a447c6eb86d333e9e78d7cea148e42b082f8211d6d8eba11541cadd404c",
+  "source_provenance": "user_supplied_method_reference; legacy source_ids are not client source registrations",
+  "files": [
+    {
+      "path": "口播结构/00_方法论/00_口播结构总方法论.md",
+      "sha256": "96d72280494be17077bddb3feccac369e8ffcc04e92709b59d44285037449cfb"
+    },
+    {
+      "path": "口播结构/00_方法论/01_七个功能锚点.md",
+      "sha256": "05e4954fcc4f84eb7400282787530901d8d8f068a5a389c9ac5738834356238a"
+    },
+    {
+      "path": "口播结构/00_方法论/02_结构选择矩阵.md",
+      "sha256": "62a2e0b50ea63729be85ab9dc153b1a58f854825732cecfbd6f6617e84149ad7"
+    },
+    {
+      "path": "口播结构/00_结构索引与AI调用规则.md",
+      "sha256": "d74048f138fea8f2a67697d6bac532fc8d3ded089b7e7f5cec4619b26b5a561e"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-001_痛点镜像与反常识解法.md",
+      "sha256": "43567ef488950f8c4037ec6330512cb4ba12e38416e1b80d561f0d02dc829bb1"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-002_教程拆步与结果兑现.md",
+      "sha256": "bd9da664e3905172784cb3019b3f8f6393a7443e3b7ff4818da3f38394527201"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-003_经历反转与方法提炼.md",
+      "sha256": "ae89ee4aa2ad9f97d5896c17624919b36afe27ad4d4c1bb07ef4849214a166af"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-004_诊断纠偏.md",
+      "sha256": "bdd8901ed9a6c294206cd3b223fc52c27352af6a8cdf0bd0b0fdef59ba38004b"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-005_产品教程与轻转化.md",
+      "sha256": "496da5c27dc25a09bc235be50e1c8737dbbec7d167f380e34192a2b9d6d8fc47"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-006_类比观点快打.md",
+      "sha256": "ce041fd2d4aefd8fb0870d2a6bbb54ecfadb4b3b04778e5153e133a263a49a45"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-007_一个结论多个证据.md",
+      "sha256": "bc720f9a47657e1e72b45847a8395280bec1dfe057c43d2a2519a84f55955eea"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-008_对比决策.md",
+      "sha256": "9db196f40015a649cce89ced872edc26bf3e3e5855b858ce205b7c7b99c6c372"
+    },
+    {
+      "path": "口播结构/01_基础结构/ORAL-STR-009_客户案例证明.md",
+      "sha256": "fc73f4fb339ee9a92532df5997b797e61ba0aa29774277519482b2c8b891ed4d"
+    },
+    {
+      "path": "口播结构/02_增强机制/ORAL-ENH-001_信息缺口.md",
+      "sha256": "e692cb1eff28adcf024974be1ff2b543eb1f10bfd4fa019d38609f9169678a16"
+    },
+    {
+      "path": "口播结构/02_增强机制/ORAL-ENH-002_嵌套开放回路.md",
+      "sha256": "0134eacded9a785b92044e898ca4b0b6e799c0047509389205ab6ef6068d9de2"
+    },
+    {
+      "path": "口播结构/02_增强机制/ORAL-ENH-003_分段与信号提示.md",
+      "sha256": "0471912b0beada4f6e8f43e2e1aba9639921833aac71414ffd4716e6866578a6"
+    },
+    {
+      "path": "口播结构/02_增强机制/ORAL-ENH-004_峰终设计.md",
+      "sha256": "dc7ce152c42a5ef9a4e8cc4ed7e9346b2197451085be9d7a2236f1ae8bf481b2"
+    },
+    {
+      "path": "口播结构/02_增强机制/ORAL-ENH-005_模式中断.md",
+      "sha256": "f9ac181403f74d4f46b1ac7ad1d96522032e83b30ac18cf902c475a83d7dafcc"
+    },
+    {
+      "path": "口播结构/03_平台与时长适配/03_时长伸缩规则.md",
+      "sha256": "2c12a336e052797642c84ace0781c4e3fac3818b400160dbc36d822acc3007d7"
+    },
+    {
+      "path": "口播结构/04_验证与反馈/04_证据等级与状态规则.md",
+      "sha256": "9e1967259029dac6db8a9f47707569c3fed886c8266ec8f5108b074938a2b2e4"
+    },
+    {
+      "path": "口播结构/04_验证与反馈/05_发布验证与反馈回写规则.md",
+      "sha256": "3c8af818e4fcfbbedc6808a7a74f31e6f03e24c14367d3aebec134864a1ae71c"
+    },
+    {
+      "path": "口播结构/99_待验证/ORAL-STR-B01_挑战记录.md",
+      "sha256": "6583e0631aae908a365090a926e5864baceea449d81745426542af1dbb105847"
+    }
+  ]
+}

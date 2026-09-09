@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 
+from skills.shared.oral_structure_preset import PresetError, load_preset
+
 
 COMPONENTS = (
     "zsk-router",
@@ -41,6 +43,8 @@ SHARED_REQUIRED_FILES = (
     "naming.py",
     "obsidian_adapter.py",
     "obsidian_stage6.py",
+    "oral_structure_install.py",
+    "oral_structure_preset.py",
     "ocr_provider.py",
     "page_renderer.py",
     "page_text.py",
@@ -83,7 +87,16 @@ def validate_source(source_root: Path) -> list[str]:
     for name in SHARED_REQUIRED_FILES:
         if not (source_root / "shared" / name).is_file():
             errors.append(f"缺少 shared 必需模块：shared/{name}")
+    errors.extend(_preset_errors(source_root / "shared"))
     return errors
+
+
+def _preset_errors(shared_root: Path) -> list[str]:
+    try:
+        load_preset(shared_root / "assets" / "oral-structure-v1")
+    except PresetError as exc:
+        return [f"口播结构预置包不完整：{exc}"]
+    return []
 
 
 def validate_package(package_root: Path) -> list[str]:
@@ -108,7 +121,7 @@ def installed_state(destination: Path) -> tuple[list[str], list[str]]:
     for name in COMPONENTS:
         target = destination / name
         valid = target.is_dir() and (
-            all((target / required).is_file() for required in SHARED_REQUIRED_FILES)
+            all((target / required).is_file() for required in SHARED_REQUIRED_FILES) and not _preset_errors(target)
             if name == "shared" else (target / "SKILL.md").is_file()
         )
         (present if valid else missing).append(name)
