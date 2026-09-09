@@ -16,6 +16,26 @@ SPEC.loader.exec_module(build_release_package)
 
 
 class ReleasePackageTests(unittest.TestCase):
+    def test_release_roundtrip_keeps_all_preset_assets(self) -> None:
+        import sys
+        sys.path.insert(0, str(ROOT))
+        import install
+        from skills.shared.oral_structure_preset import load_preset
+        members = build_release_package.select_release_members([
+            *build_release_package.EXACT_MEMBERS,
+            *(path.relative_to(ROOT).as_posix() for base in (ROOT / "skills", ROOT / "schemas") for path in base.rglob("*") if path.is_file()),
+        ])
+        with tempfile.TemporaryDirectory() as folder:
+            temporary = Path(folder)
+            archive_path = temporary / "release.zip"
+            build_release_package.write_release_archive(ROOT, archive_path, members, "test-only")
+            extracted = temporary / "package"
+            with zipfile.ZipFile(archive_path) as archive:
+                archive.extractall(extracted)
+            self.assertEqual(install.validate_package(extracted), [])
+            preset = load_preset(extracted / "skills" / "shared" / "assets" / "oral-structure-v1")
+            self.assertEqual(len(preset.documents), 22)
+
     def test_selects_only_installation_files_and_excludes_bytecode(self) -> None:
         tracked = (
             "README.md",

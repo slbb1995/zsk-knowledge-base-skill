@@ -20,6 +20,8 @@ from .content_source_contract import (
 from .feishu_adapter import FeishuAdapter
 from .feishu_cli import CliResponse, CliRunner, SubprocessCliRunner
 from .obsidian_adapter import ObsidianAdapter
+from .oral_structure_preset import OralStructurePreset, PresetError, load_preset
+from .oral_structure_install import install_feishu_preset, install_obsidian_preset
 from .stage2_router import RouterRequest, Stage2Router, classify_intent
 from .templates import TEMPLATE_VERSION
 
@@ -82,16 +84,21 @@ class FirstRunBootstrap:
                 "readback_failed": "无法确认飞书中是否已有同名知识空间，未创建。",
             }
             return BootstrapResponse("connection_required" if code == "feishu_auth_missing" else "needs_input", code, messages.get(code, "创建前检查未通过，未创建。"), preview, None, None)
-        token = self._token(request.backend_type, client_name, name, preview["target"])
+        try:
+            preset = load_preset()
+        except PresetError as exc:
+            return BootstrapResponse("blocked", exc.code, str(exc) + " 未创建知识库。", preview, None, None)
+        preview = self._preset_preview(preview, preset)
+        token = self._token(request.backend_type, client_name, name, preview["target"], preset.sha256)
         if request.confirmation != token:
             self._issued.add(token)
-            return BootstrapResponse("confirmation_required", None, "请确认这个名称和目标位置；确认后才会创建。", preview, token, None)
+            return BootstrapResponse("confirmation_required", None, "请确认名称、目标位置及包含完整口播结构库的建库内容；确认后一起创建。", preview, token, None)
         if token not in self._issued:
             return BootstrapResponse("blocked", "confirmation_mismatch", "确认信息无效或已过期，未创建。", preview, None, None)
         self._issued.remove(token)
         if request.backend_type == "obsidian":
-            return self._create_obsidian(client_name, name, Path(preview["target"]))
-        return self._create_feishu(client_name, name)
+            return self._create_obsidian(client_name, name, Path(preview["target"]), preset)
+        return self._create_feishu(client_name, name, preset)
 
     def _preview(self, backend: str, name: str, parent: str | None) -> tuple[dict[str, str], str | None]:
         if backend == "feishu":
@@ -112,7 +119,7 @@ class FirstRunBootstrap:
             return {"backend": "obsidian", "name": name, "target": str(target)}, "binding_conflict"
         return {"backend": "obsidian", "name": name, "target": str(target)}, None
 
-    def _create_obsidian(self, client_name: str, name: str, target: Path) -> BootstrapResponse:
+    def _create_obsidian(self, client_name: str, name: str, target: Path, preset: OralStructurePreset) -> BootstrapResponse:
         try:
             os.mkdir(target, 0o700)
         except OSError:
@@ -132,9 +139,14 @@ class FirstRunBootstrap:
             write_obsidian_base_contract(target, manifest, index)
         except (OSError, ContentSourceContractError) as exc:
             return BootstrapResponse("blocked", "write_failed", f"知识库结构已创建，但基础 Content 清单未完整写入：{exc}", {"backend": "obsidian", "name": name, "target": str(target)}, None, str(target), result.root_refs)
-        return BootstrapResponse("created", None, "知识库与基础自描述清单已创建，可以开始上传资料。", {"backend": "obsidian", "name": name, "target": str(target)}, None, str(target), result.root_refs)
+        preview = self._preset_preview({"backend": "obsidian", "name": name, "target": str(target)}, preset)
+        try:
+            install_obsidian_preset(target, preset)
+        except PresetError as exc:
+            return BootstrapResponse("blocked", exc.code, "知识库骨架已创建，但口播结构预置未完整完成。" + str(exc), preview, None, str(target), result.root_refs)
+        return BootstrapResponse("created", None, "知识库、基础自描述清单和完整口播结构库已创建并回读，可以开始上传资料。", preview, None, str(target), result.root_refs)
 
-    def _create_feishu(self, client_name: str, name: str) -> BootstrapResponse:
+    def _create_feishu(self, client_name: str, name: str, preset: OralStructurePreset) -> BootstrapResponse:
         data = {"name": name, "description": "由 ZSK 首次建库创建。", "open_sharing": "closed"}
         response = self.runner.run(("lark-cli", "--as", "user", "wiki", "spaces", "create", "--data", json.dumps(data, ensure_ascii=False, separators=(",", ":")), "--yes", "--format", "json"))
         payload = self._json(response)
@@ -158,7 +170,17 @@ class FirstRunBootstrap:
             )
         except ContentSourceContractError as exc:
             return BootstrapResponse("blocked", "write_failed", f"飞书结构已创建，但基础 Content 清单未完整写入：{exc}", {"backend": "feishu", "name": name, "target": locator}, None, locator, result.root_refs)
-        return BootstrapResponse("created", None, "知识库与基础自描述清单已创建，可以开始上传资料。", {"backend": "feishu", "name": name, "target": locator}, None, locator, result.root_refs)
+        preview = self._preset_preview({"backend": "feishu", "name": name, "target": locator}, preset)
+        try:
+            install_feishu_preset(self.runner, space_id, preset)
+        except PresetError as exc:
+            return BootstrapResponse("blocked", exc.code, "飞书知识库骨架已创建，但口播结构预置未完整完成。" + str(exc), preview, None, locator, result.root_refs)
+        return BootstrapResponse("created", None, "知识库、基础自描述清单和完整口播结构库已创建并回读，可以开始上传资料。", preview, None, locator, result.root_refs)
+
+    @staticmethod
+    def _preset_preview(preview: dict[str, str], preset: OralStructurePreset) -> dict[str, str]:
+        return {**preview, "included_content": f"04-内容方法库/口播结构：完整目录与 {len(preset.documents)} 份文档；每库独立副本",
+                "preset_version": preset.version, "preset_sha256": preset.sha256, "template_version": TEMPLATE_VERSION}
 
     def _feishu_name_exists(self, name: str) -> bool | None:
         response = self.runner.run(("lark-cli", "--as", "user", "wiki", "spaces", "list", "--page-all", "--format", "json"))
@@ -197,8 +219,8 @@ class FirstRunBootstrap:
             return False
 
     @staticmethod
-    def _token(backend: str, client_name: str, name: str, target: str) -> str:
-        return hashlib.sha256(f"{backend}\n{client_name}\n{name}\n{target}".encode()).hexdigest()[:24]
+    def _token(backend: str, client_name: str, name: str, target: str, preset_sha256: str) -> str:
+        return hashlib.sha256(f"{backend}\n{client_name}\n{name}\n{target}\n{TEMPLATE_VERSION}\n{preset_sha256}".encode()).hexdigest()[:24]
 
     @staticmethod
     def _client_id(locator: str) -> str:
