@@ -6,16 +6,17 @@
 
 这是 **ZSK 的唯一更新真源**。所有 ZSK 功能、安装说明和测试先在这里修改、验证并合并到 `main`。
 
-后续只能从这里单向同步到：
+ZSK 与下游仓库保持独立。ZSK 的代码只能从这里单向进入客户交付包和本机安装副本：
 
 ```text
 zsk-knowledge-base-skill（唯一真源）
 → zhihui-mianmian-skills（客户交付包）
-→ content-slim（知识库消费桥接）
 → 客户或讲师本机 ~/.codex/skills（运行安装副本）
 ```
 
-不要在交付包、Content Slim 或已安装副本中反向修改 ZSK；它们不是更新真源。历史 `content-workflow-skills` 只保留开发与验收记录，不再作为 ZSK 的日常开发入口。
+Content Slim 是独立的知识库消费仓库，只通过 03/04/05 文件合同衔接，不复制或更新 ZSK 代码。不要在交付包、Content Slim 或已安装副本中反向修改 ZSK；它们不是更新真源。历史 `content-workflow-skills` 只保留开发与验收记录，不再作为 ZSK 的日常开发入口。
+
+面向 Content Slim 时，ZSK 的 04 方法卡必须带可选择元数据，05 主 Profile 必须带唯一 active primary 标记。仓库回归测试会锁定这两个跨仓合同，避免两个仓库各自测试通过、组合后却不可用。
 
 ## 一句话理解
 
