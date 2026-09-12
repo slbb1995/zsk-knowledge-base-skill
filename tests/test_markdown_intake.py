@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "skills"))
 
 from shared.contracts import BINDING_SCHEMA, ROOT_KEYS, Binding  # noqa: E402
 from shared.fake_adapter import FakeAdapter  # noqa: E402
-from shared.markdown_converter import MarkdownConversion, normalize_pptx_slide_markers, remove_unpersisted_local_images  # noqa: E402
+from shared.markdown_converter import MarkdownConversion, normalize_pptx_slide_markers, remove_unpersisted_local_images, strip_extraction_nuls  # noqa: E402
 from shared.stage5_intake import IntakeRequest, Stage5Intake  # noqa: E402
 from shared.stage6_knowledge import KnowledgeRequest, Stage6Knowledge  # noqa: E402
 from shared.stage7_method import MethodRequest, Stage7Method  # noqa: E402
@@ -64,6 +64,10 @@ class MarkdownIntakeTests(unittest.TestCase):
     def test_pptx_slide_comments_become_visible_page_headings(self) -> None:
         text = "<!-- Slide number: 1 -->\n\n项目定位\n\n<!-- Slide number: 2 -->"
         self.assertEqual(normalize_pptx_slide_markers(text), "## 第 1 页\n\n项目定位\n\n## 第 2 页")
+
+    def test_extraction_nul_characters_are_removed_before_safe_text_check(self) -> None:
+        self.assertEqual(strip_extraction_nuls("可读\x00正文\x00"), "可读正文")
+        self.assertEqual(strip_extraction_nuls("\x00\x00"), "")
 
     def test_missing_local_image_placeholder_becomes_honest_note(self) -> None:
         converted = remove_unpersisted_local_images("正文\n\n![](图片1.jpg)\n")

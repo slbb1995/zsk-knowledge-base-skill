@@ -54,6 +54,21 @@ class ObsidianControlDirectoryTests(unittest.TestCase):
             )
             self.assertEqual((response.status, response.code), ("registered", None))
 
+    def test_standard_git_and_obsidian_control_objects_are_allowed(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/private/tmp" if sys.platform == "darwin" else None) as folder:
+            active_binding = binding(folder)
+            adapter = ObsidianAdapter()
+            self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+            self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+            root = Path(folder)
+            (root / ".obsidian").mkdir()
+            (root / ".git").mkdir()
+            (root / ".gitignore").write_text(".obsidian/workspace.json\n", encoding="utf-8")
+            (root / ".DS_Store").write_bytes(b"finder-metadata")
+
+            inspected = adapter.inspect_structure(active_binding)
+            self.assertEqual((inspected.status, inspected.code), ("reused", None))
+
     def test_non_directory_obsidian_control_object_is_blocked(self) -> None:
         with tempfile.TemporaryDirectory(dir="/private/tmp" if sys.platform == "darwin" else None) as folder:
             active_binding = binding(folder)
