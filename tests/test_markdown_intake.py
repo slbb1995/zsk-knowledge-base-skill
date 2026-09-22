@@ -70,6 +70,23 @@ class MarkdownIntakeTests(unittest.TestCase):
         self.assertNotIn("图片1.jpg", converted)
         self.assertIn("原文图片未在轻量文字模式中保存", converted)
 
+    def test_converter_removes_nuls_but_rejects_empty_extraction(self) -> None:
+        from subprocess import CompletedProcess
+        from shared.markdown_converter import convert_to_markdown, ConversionFailed
+        for extracted, expected in (("可读\x00正文\r\n", "可读正文\n"), ("\x00\x00", None)):
+            with self.subTest(extracted=repr(extracted)):
+                def convert(argv, **kwargs):
+                    Path(argv[-1]).write_bytes(extracted.encode("utf-8"))
+                    return CompletedProcess(argv, 0, "", "")
+                with mock.patch("shared.markdown_converter._executable", return_value="fixture-markitdown"), \
+                     mock.patch("shared.markdown_converter._version", return_value="fixture-only"), \
+                     mock.patch("shared.markdown_converter.subprocess.run", side_effect=convert):
+                    if expected is None:
+                        with self.assertRaises(ConversionFailed):
+                            convert_to_markdown(b"isolated fixture", ".pdf")
+                    else:
+                        self.assertEqual(convert_to_markdown(b"isolated fixture", ".pdf").text, expected)
+
     def test_truncated_data_image_placeholder_becomes_honest_note(self) -> None:
         converted = remove_unpersisted_local_images(
             "正文\n\n![账号截图](data:image/jpeg;base64...)\n"
