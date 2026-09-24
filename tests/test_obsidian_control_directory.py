@@ -169,11 +169,19 @@ class ObsidianControlDirectoryTests(unittest.TestCase):
             self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
             self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
             junction = vault / ".git"
+            def ps_literal(path: Path) -> str:
+                return "'" + str(path).replace("'", "''") + "'"
+
             created = subprocess.run(
-                ["cmd", "/d", "/c", f'mklink /J "{junction}" "{outside}"'],
+                [
+                    "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                    f"New-Item -ItemType Junction -Path {ps_literal(junction)} "
+                    f"-Target {ps_literal(outside)} -ErrorAction Stop | Out-Null",
+                ],
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(created.returncode, 0, created.stderr or created.stdout)
+            self.assertTrue(junction.is_dir())
             result = adapter.inspect_structure(active_binding)
             self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
 
