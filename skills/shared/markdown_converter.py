@@ -61,7 +61,7 @@ def convert_to_markdown(payload: bytes, suffix: str) -> MarkdownConversion:
             text = output.read_text(encoding="utf-8")
         except UnicodeError as exc:
             raise ConversionFailed("MarkItDown output is not UTF-8") from exc
-    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    text = strip_extraction_nuls(text.replace("\r\n", "\n").replace("\r", "\n")).strip()
     if suffix == ".pptx":
         text = normalize_pptx_slide_markers(text)
     text = remove_unpersisted_local_images(text)
@@ -73,6 +73,11 @@ def convert_to_markdown(payload: bytes, suffix: str) -> MarkdownConversion:
 def normalize_pptx_slide_markers(text: str) -> str:
     """把 MarkItDown 的隐藏页码注释转换成可见、可引用的页标题。"""
     return _PPTX_SLIDE_COMMENT.sub(lambda match: f"## 第 {match.group(1)} 页", text)
+
+
+def strip_extraction_nuls(text: str) -> str:
+    """移除文档提取器偶发插入的 NUL 控制字符；空输出仍由调用方拒绝。"""
+    return text.replace("\x00", "")
 
 
 def remove_unpersisted_local_images(text: str) -> str:

@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import stat
+import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,6 +69,121 @@ class ObsidianControlDirectoryTests(unittest.TestCase):
 
             inspected = adapter.inspect_structure(active_binding)
             self.assertEqual((inspected.status, inspected.code), ("blocked", "structure_conflict"))
+
+    def test_standard_git_control_objects_allow_intake_without_modification(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/private/tmp" if sys.platform == "darwin" else None) as folder:
+            active_binding = binding(folder)
+            adapter = ObsidianAdapter()
+            self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+            self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+            root = Path(folder)
+            (root / ".git").mkdir()
+            (root / ".git" / "config").write_bytes(b"fixture git config")
+            (root / ".gitignore").write_bytes(b".obsidian/workspace.json\n")
+            (root / ".DS_Store").write_bytes(b"fixture finder metadata")
+            originals = {path: path.read_bytes() for path in (
+                root / ".git" / "config", root / ".gitignore", root / ".DS_Store")}
+            response = Stage5Intake(adapter).execute(IntakeRequest(
+                TASK_ID, active_binding, "fixture.md", b"# Isolated fixture\n", "fixture"))
+            self.assertEqual((response.status, response.code), ("registered", None))
+            self.assertTrue(all(path.read_bytes() == data for path, data in originals.items()))
+
+    def test_repository_control_wrong_types_remain_blocked(self) -> None:
+        for name in (".git", ".gitignore", ".DS_Store"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory(
+                dir="/private/tmp" if sys.platform == "darwin" else None
+            ) as folder:
+                active_binding = binding(folder)
+                adapter = ObsidianAdapter()
+                self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+                self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+                path = Path(folder) / name
+                if name == ".git":
+                    path.write_bytes(b"not a directory")
+                else:
+                    path.mkdir()
+                result = adapter.inspect_structure(active_binding)
+                self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
+
+    def test_repository_control_symlinks_remain_blocked(self) -> None:
+        for name in (".git", ".gitignore", ".DS_Store"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory(
+                dir="/private/tmp" if sys.platform == "darwin" else None
+            ) as folder:
+                vault = Path(folder) / "vault"
+                vault.mkdir()
+                active_binding = binding(str(vault))
+                adapter = ObsidianAdapter()
+                self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+                self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+                outside = Path(folder) / "outside"
+                if name == ".git":
+                    outside.mkdir()
+                else:
+                    outside.write_bytes(b"outside fixture")
+                try:
+                    (vault / name).symlink_to(outside, target_is_directory=name == ".git")
+                except OSError:
+                    self.skipTest("Host does not permit symlink creation")
+                result = adapter.inspect_structure(active_binding)
+                self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
+
+    def test_reparse_control_directory_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/private/tmp" if sys.platform == "darwin" else None) as folder:
+            active_binding = binding(folder)
+            adapter = ObsidianAdapter()
+            self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+            self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+            (Path(folder) / ".git").mkdir()
+            real_scandir = os.scandir
+
+            class ReparseEntry:
+                def __init__(self, entry):
+                    self.entry = entry
+                    self.name = entry.name
+                    self.path = entry.path
+
+                def stat(self, *, follow_symlinks=True):
+                    if self.name == ".git":
+                        return SimpleNamespace(st_mode=stat.S_IFDIR, st_file_attributes=0x400)
+                    return self.entry.stat(follow_symlinks=follow_symlinks)
+
+            def scandir(path):
+                with real_scandir(path) as entries:
+                    return [ReparseEntry(entry) for entry in entries]
+
+            with mock.patch("shared.obsidian_adapter.os.scandir", side_effect=scandir):
+                result = adapter.inspect_structure(active_binding)
+            self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows junction test")
+    def test_windows_git_junction_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            vault = base / "vault"
+            outside = base / "outside"
+            vault.mkdir()
+            outside.mkdir()
+            active_binding = binding(str(vault))
+            adapter = ObsidianAdapter()
+            self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+            self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+            junction = vault / ".git"
+            def ps_literal(path: Path) -> str:
+                return "'" + str(path).replace("'", "''") + "'"
+
+            created = subprocess.run(
+                [
+                    "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                    f"New-Item -ItemType Junction -Path {ps_literal(junction)} "
+                    f"-Target {ps_literal(outside)} -ErrorAction Stop | Out-Null",
+                ],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(created.returncode, 0, created.stderr or created.stdout)
+            self.assertTrue(junction.is_dir())
+            result = adapter.inspect_structure(active_binding)
+            self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
 
     def test_other_unknown_root_object_remains_blocked(self) -> None:
         with tempfile.TemporaryDirectory(dir="/private/tmp" if sys.platform == "darwin" else None) as folder:
