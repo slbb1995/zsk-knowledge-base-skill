@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import stat
+import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,6 +127,55 @@ class ObsidianControlDirectoryTests(unittest.TestCase):
                     self.skipTest("Host does not permit symlink creation")
                 result = adapter.inspect_structure(active_binding)
                 self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
+
+    def test_reparse_control_directory_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/private/tmp" if sys.platform == "darwin" else None) as folder:
+            active_binding = binding(folder)
+            adapter = ObsidianAdapter()
+            self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+            self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+            (Path(folder) / ".git").mkdir()
+            real_scandir = os.scandir
+
+            class ReparseEntry:
+                def __init__(self, entry):
+                    self.entry = entry
+                    self.name = entry.name
+                    self.path = entry.path
+
+                def stat(self, *, follow_symlinks=True):
+                    if self.name == ".git":
+                        return SimpleNamespace(st_mode=stat.S_IFDIR, st_file_attributes=0x400)
+                    return self.entry.stat(follow_symlinks=follow_symlinks)
+
+            def scandir(path):
+                with real_scandir(path) as entries:
+                    return [ReparseEntry(entry) for entry in entries]
+
+            with mock.patch("shared.obsidian_adapter.os.scandir", side_effect=scandir):
+                result = adapter.inspect_structure(active_binding)
+            self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows junction test")
+    def test_windows_git_junction_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            vault = base / "vault"
+            outside = base / "outside"
+            vault.mkdir()
+            outside.mkdir()
+            active_binding = binding(str(vault))
+            adapter = ObsidianAdapter()
+            self.assertEqual(adapter.resolve_binding(active_binding).status, "ok")
+            self.assertEqual(adapter.create_skeleton(active_binding).status, "ok")
+            junction = vault / ".git"
+            created = subprocess.run(
+                ["cmd", "/d", "/c", f'mklink /J "{junction}" "{outside}"'],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(created.returncode, 0, created.stderr or created.stdout)
+            result = adapter.inspect_structure(active_binding)
+            self.assertEqual((result.status, result.code), ("blocked", "structure_conflict"))
 
     def test_other_unknown_root_object_remains_blocked(self) -> None:
         with tempfile.TemporaryDirectory(dir="/private/tmp" if sys.platform == "darwin" else None) as folder:

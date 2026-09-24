@@ -29,6 +29,12 @@ _REPOSITORY_CONTROL_DIRECTORIES = frozenset({".git"})
 _REPOSITORY_CONTROL_FILES = frozenset({".gitignore", ".DS_Store"})
 
 
+def _is_link_or_reparse(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    )
+
+
 def _rule_body(content: str) -> str:
     return content.partition("\n")[2]
 
@@ -51,7 +57,7 @@ def canonical_obsidian_locator(locator: str) -> str | None:
         for part in path.parts[1:]:
             current /= part
             info = os.lstat(current)
-            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400):
+            if _is_link_or_reparse(info):
                 return None
         return str(path) if stat.S_ISDIR(os.lstat(path).st_mode) else None
     except (OSError, ValueError):
@@ -322,20 +328,20 @@ class ObsidianAdapter:
             if entry is None:
                 continue
             try:
-                mode = entry.stat(follow_symlinks=False).st_mode
+                info = entry.stat(follow_symlinks=False)
             except OSError:
                 return (), (), AdapterResult.failed("readback_failed", "Obsidian control directory cannot be inspected safely.", blocked=True)
-            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+            if _is_link_or_reparse(info) or not stat.S_ISDIR(info.st_mode):
                 return (), (), AdapterResult.failed("structure_conflict", "Control directory type is invalid.", blocked=True)
         for name in _REPOSITORY_CONTROL_FILES:
             entry = entries.get(name)
             if entry is None:
                 continue
             try:
-                mode = entry.stat(follow_symlinks=False).st_mode
+                info = entry.stat(follow_symlinks=False)
             except OSError:
                 return (), (), AdapterResult.failed("readback_failed", "Repository control file cannot be inspected safely.", blocked=True)
-            if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
+            if _is_link_or_reparse(info) or not stat.S_ISREG(info.st_mode):
                 return (), (), AdapterResult.failed("structure_conflict", "Repository control file type is invalid.", blocked=True)
         found: list[str] = []
         for key in ROOT_KEYS:
@@ -343,11 +349,11 @@ class ObsidianAdapter:
             if entry is None:
                 continue
             try:
-                mode = entry.stat(follow_symlinks=False).st_mode
+                info = entry.stat(follow_symlinks=False)
             except OSError:
                 return (), (), AdapterResult.failed("readback_failed", "Root object cannot be inspected safely.", blocked=True)
             expected_directory = root_object_kind(binding, key) == "directory"
-            if stat.S_ISLNK(mode) or (expected_directory and not stat.S_ISDIR(mode)) or (not expected_directory and not stat.S_ISREG(mode)):
+            if _is_link_or_reparse(info) or (expected_directory and not stat.S_ISDIR(info.st_mode)) or (not expected_directory and not stat.S_ISREG(info.st_mode)):
                 return (), (), AdapterResult.failed("structure_conflict", "Root object type is invalid.", blocked=True)
             if key in _RULE_KEYS and not self._rule_matches(binding, key, Path(entry.path)):
                 return (), (), AdapterResult.failed("structure_conflict", "Root rules are customer-owned or differ from the template.", blocked=True)

@@ -1,0 +1,20 @@
+name: Windows Obsidian control objects
+
+on:
+  pull_request:
+    paths:
+      - "skills/shared/obsidian_adapter.py"
+      - "tests/test_obsidian_control_directory.py"
+      - ".github/workflows/windows-obsidian-control.yml"
+  workflow_dispatch:
+
+jobs:
+  windows-control:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run Obsidian control object tests
+        run: python -B -m unittest discover -s tests -p "test_obsidian_control_directory.py" -v
