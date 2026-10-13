@@ -4,6 +4,7 @@ from dataclasses import replace
 import hashlib
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -16,7 +17,7 @@ from shared.contracts import BINDING_SCHEMA, ROOT_KEYS, Binding
 from shared.converter_probe import MARKER, sample_document
 from shared.fake_adapter import FakeAdapter
 from shared.image_input import prepare_image
-from shared.legacy_doc import LegacyConversion, LegacyConverterUnavailable, convert_legacy_doc, validate_legacy_word
+from shared.legacy_doc import LegacyConversion, LegacyConverterUnavailable, _WORD_SCRIPT, convert_legacy_doc, validate_legacy_word
 from shared.markdown_converter import ConversionFailed, ConverterUnavailable, MarkdownConversion
 from shared.obsidian_adapter import ObsidianAdapter
 from shared.ocr_provider import AutoOcrProvider, OcrResult
@@ -206,6 +207,53 @@ class LegacyImageIntakeTests(unittest.TestCase):
              mock.patch("shared.legacy_doc.subprocess.run", side_effect=run):
             with self.assertRaises(ConversionFailed):
                 convert_legacy_doc((ASSETS / "legacy.doc").read_bytes())
+
+    @unittest.skipUnless(sys.platform == "win32", "PowerShell script execution requires Windows")
+    def test_windows_script_works_with_word_application_without_hwnd(self):
+        powershell = shutil.which("powershell.exe") or shutil.which("pwsh")
+        self.assertIsNotNone(powershell)
+        # Execute the actual script against a minimal Word API. Application has
+        # no Hwnd; native COM release is the only operation removed for this shim.
+        body = _WORD_SCRIPT.strip().split("\n", 1)[1]
+        body = body.replace("[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($document)", "[void]$document")
+        body = body.replace("[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($app)", "[void]$app")
+        shim = r'''
+param([string]$Source,[string]$Target,[string]$IdentityFile,[string]$Fixture)
+Set-StrictMode -Version Latest
+$global:fixturePath=$Fixture
+$global:processReads=0
+$global:closed=$false
+$global:quit=$false
+$global:fakeDocument=[pscustomobject]@{}
+$global:fakeDocument | Add-Member ScriptMethod SaveAs2 { param($Path,$Format) Copy-Item -LiteralPath $global:fixturePath -Destination $Path }
+$global:fakeDocument | Add-Member ScriptMethod Close { param($Save) $global:closed=$true }
+$documents=[pscustomobject]@{Count=0}
+$documents | Add-Member ScriptMethod Open { param($Path,$Confirm,$ReadOnly,$Recent) return $global:fakeDocument }
+$global:fakeApplication=[pscustomobject]@{Documents=$documents;Visible=$false;DisplayAlerts=0;AutomationSecurity=0;Options=[pscustomobject]@{UpdateLinksAtOpen=$true}}
+$global:fakeApplication | Add-Member ScriptMethod Quit { param($Save) $global:quit=$true }
+function Get-Process {
+    [CmdletBinding()]param([string]$Name,[int]$Id)
+    $global:processReads++
+    if ($global:processReads -eq 1) { return }
+    return [pscustomobject]@{Id=424242;ProcessName='WINWORD';StartTime=[DateTime]::UtcNow}
+}
+function New-Object {
+    [CmdletBinding()]param([string]$ComObject)
+    if ($ComObject -ne 'Word.Application') { throw 'unexpected COM application' }
+    return $global:fakeApplication
+}
+'''
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source, target, identity, fixture = (root / name for name in ("source.doc", "target.docx", "process.json", "fixture.docx"))
+            source.write_bytes((ASSETS / "legacy.doc").read_bytes())
+            fixture.write_bytes(sample_document("docx"))
+            script = root / "word-shim.ps1"
+            script.write_text(shim + body + "\nif (-not $global:closed -or -not $global:quit) { throw 'cleanup did not complete' }\n", encoding="utf-8-sig")
+            result = subprocess.run((powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script), str(source), str(target), str(identity), str(fixture)), capture_output=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
+            self.assertEqual(target.read_bytes(), fixture.read_bytes())
+            self.assertTrue(identity.is_file())
 
 
 if __name__ == "__main__":

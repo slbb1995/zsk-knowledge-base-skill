@@ -35,21 +35,17 @@ if (Get-Process -Name WINWORD -ErrorAction SilentlyContinue) { exit 20 }
 $app=$null
 $document=$null
 $owned=$false
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public static class ZskWordUser32 {
-    [DllImport("user32.dll")]
-    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-}
-'@
+$creationBoundary=[DateTime]::UtcNow
 try {
     $app=New-Object -ComObject Word.Application
     if ($app.Documents.Count -ne 0) { throw 'Word has existing documents; automatic conversion stopped' }
-    [uint32]$processId=0
-    [void][ZskWordUser32]::GetWindowThreadProcessId([IntPtr]$app.Hwnd,[ref]$processId)
-    $process=Get-Process -Id $processId -ErrorAction Stop
-    if ($process.ProcessName -ne 'WINWORD') { throw 'Word process ownership unavailable' }
+    # Word exposes Hwnd on Window, not Application. Before opening a customer
+    # document there is no Window; identify the sole freshly created process.
+    $processes=@(Get-Process -Name WINWORD -ErrorAction Stop)
+    if ($processes.Count -ne 1) { throw 'Word process ownership unavailable' }
+    $process=$processes[0]
+    if ($process.StartTime.ToUniversalTime() -lt $creationBoundary) { throw 'Word process predates this conversion' }
+    $processId=$process.Id
     $owned=$true
     $identity=[ordered]@{pid=[int]$processId;start=$process.StartTime.ToUniversalTime().ToString('o')} | ConvertTo-Json -Compress
     [IO.File]::WriteAllText($IdentityFile,$identity,[Text.Encoding]::UTF8)
