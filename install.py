@@ -82,6 +82,19 @@ WINDOWS_POWERPOINT_DETECTION_SCRIPT = (
 )
 
 
+def _configure_console() -> None:
+    """Windows redirected consoles may default to cp1252 and reject Chinese receipts."""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                pass
+
+
 def default_destination() -> Path:
     codex_home = os.environ.get("CODEX_HOME")
     if codex_home:
@@ -151,6 +164,7 @@ def converter_version() -> str | None:
 
 
 def install_converter(formats: tuple[str, ...] = ("docx", "pdf", "pptx", "xlsx")) -> bool:
+    _configure_console()
     readiness = probe_formats(formats)
     missing = tuple(kind for kind, ready in readiness.items() if not ready)
     if not missing:
@@ -221,6 +235,7 @@ def install_converter(formats: tuple[str, ...] = ("docx", "pdf", "pptx", "xlsx")
 
 def prepare_dependencies(formats: tuple[str, ...]) -> bool:
     """Prepare only requested capabilities in the environments actually used by ZSK."""
+    _configure_console()
     extras = set(formats) - set(FORMATS)
     if not extras:
         return install_converter(formats)
@@ -392,6 +407,7 @@ def _optional_binary_ready(names: tuple[str, ...], version_args: tuple[str, ...]
 
 
 def install(source_root: Path, destination: Path, *, allow_reuse: bool = False) -> int:
+    _configure_console()
     source_errors = validate_source(source_root)
     if source_errors:
         print("安装包不完整，已停止：", file=sys.stderr)
@@ -457,6 +473,7 @@ def print_install_success(destination: Path) -> None:
 
 
 def main() -> int:
+    _configure_console()
     parser = argparse.ArgumentParser(description="安装完整的 ZSK 知识库 Skill 组合")
     parser.add_argument("--dest", type=Path, help="宿主实际持久 Skills 目录；非 Codex 宿主必须显式提供")
     parser.add_argument("--host", choices=("codex", "workbuddy", "doubao", "other"), default="codex")

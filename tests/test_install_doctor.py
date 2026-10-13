@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import io
 from unittest import mock
 import tempfile
 import unittest
@@ -15,6 +16,16 @@ import install  # noqa: E402
 
 
 class InstallDoctorTests(unittest.TestCase):
+    def test_windows_redirected_output_accepts_chinese_receipts(self):
+        buffer = io.BytesIO()
+        stream = io.TextIOWrapper(buffer, encoding="cp1252")
+        with mock.patch.object(sys, "platform", "win32"), mock.patch.object(sys, "stdout", stream):
+            install._configure_console()
+            stream.write("转换依赖已复用")
+            stream.flush()
+        self.assertEqual(buffer.getvalue().decode("utf-8"), "转换依赖已复用")
+        stream.detach()
+
     def test_prepare_existing_identical_bundle_does_not_copy_again(self):
         with tempfile.TemporaryDirectory() as folder:
             destination = Path(folder) / "skills"
