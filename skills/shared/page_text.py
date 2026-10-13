@@ -139,8 +139,10 @@ def build_page_text_evidence(
         page_inputs = extract_pptx_page_text(source_payload)
     elif suffix == ".pdf":
         page_inputs = extract_pdf_page_inputs(source_payload, len(rendered_pages))
+    elif suffix in {".jpg", ".jpeg", ".png"}:
+        page_inputs = (PptxPageText(1, "", True, True),)
     else:
-        raise PageTextFailed("page text evidence only supports PDF and PPTX")
+        raise PageTextFailed("page text evidence only supports PDF, PPTX and submitted PNG/JPEG")
     if [item.page_number for item in page_inputs] != [item.artifact.page_number for item in rendered_pages]:
         raise PageTextFailed("page text and rendered page counts differ")
     unknown_corrections = set(corrections) - {item.page_number for item in page_inputs}
@@ -158,7 +160,11 @@ def build_page_text_evidence(
         verbatim = native
         if page_input.requires_ocr:
             if active_provider is None:
-                active_provider = default_auto_ocr_provider()
+                active_provider = (AutoOcrProvider(require_numeric_agreement=True)
+                                   if suffix in {".jpg", ".jpeg", ".png"} else default_auto_ocr_provider())
+            elif suffix in {".jpg", ".jpeg", ".png"} and isinstance(active_provider, AutoOcrProvider) and not active_provider.require_numeric_agreement:
+                active_provider = AutoOcrProvider(active_provider.providers,
+                    agreement_threshold=active_provider.agreement_threshold, require_numeric_agreement=True)
             try:
                 result = active_provider.recognize(rendered.payload)
             except OcrUnavailable:

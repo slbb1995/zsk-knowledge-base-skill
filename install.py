@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,8 @@ import sys
 from skills.shared.oral_structure_preset import PresetError, load_preset
 from skills.shared.markdown_converter import markitdown_status, _version
 from skills.shared.converter_probe import FORMATS, probe_formats
+from skills.shared.intake_probe import INTAKE_FORMATS, probe_intake_formats
+from skills.shared.legacy_doc import legacy_backend
 
 
 COMPONENTS = (
@@ -45,6 +48,9 @@ SHARED_REQUIRED_FILES = (
     "feishu_stage5.py",
     "markdown_converter.py",
     "converter_probe.py",
+    "legacy_doc.py",
+    "image_input.py",
+    "intake_probe.py",
     "naming.py",
     "obsidian_adapter.py",
     "obsidian_stage6.py",
@@ -76,6 +82,19 @@ WINDOWS_POWERPOINT_DETECTION_SCRIPT = (
 )
 
 
+def _configure_console() -> None:
+    """Windows redirected consoles may default to cp1252 and reject Chinese receipts."""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                pass
+
+
 def default_destination() -> Path:
     codex_home = os.environ.get("CODEX_HOME")
     if codex_home:
@@ -95,6 +114,9 @@ def validate_source(source_root: Path) -> list[str]:
         if not (source_root / "shared" / name).is_file():
             errors.append(f"缺少 shared 必需模块：shared/{name}")
     errors.extend(_preset_errors(source_root / "shared"))
+    for name in ("legacy.doc", "image.png", "image.jpg"):
+        if not (source_root / "shared/assets/intake-probe" / name).is_file():
+            errors.append(f"缺少资料转换实测样本：{name}")
     return errors
 
 
@@ -129,6 +151,7 @@ def installed_state(destination: Path) -> tuple[list[str], list[str]]:
         target = destination / name
         valid = target.is_dir() and (
             all((target / required).is_file() for required in SHARED_REQUIRED_FILES) and not _preset_errors(target)
+            and all((target / "assets/intake-probe" / name).is_file() for name in ("legacy.doc", "image.png", "image.jpg"))
             if name == "shared" else (target / "SKILL.md").is_file()
         )
         (present if valid else missing).append(name)
@@ -141,6 +164,7 @@ def converter_version() -> str | None:
 
 
 def install_converter(formats: tuple[str, ...] = ("docx", "pdf", "pptx", "xlsx")) -> bool:
+    _configure_console()
     readiness = probe_formats(formats)
     missing = tuple(kind for kind, ready in readiness.items() if not ready)
     if not missing:
@@ -206,6 +230,48 @@ def install_converter(formats: tuple[str, ...] = ("docx", "pdf", "pptx", "xlsx")
     if not all(probe_formats(formats).values()):
         print("安装已结束，但所需格式转换未全部通过；不能报告依赖就绪。", file=sys.stderr)
         return False
+    return True
+
+
+def prepare_dependencies(formats: tuple[str, ...]) -> bool:
+    """Prepare only requested capabilities in the environments actually used by ZSK."""
+    _configure_console()
+    extras = set(formats) - set(FORMATS)
+    if not extras:
+        return install_converter(formats)
+    if "doc" in extras and legacy_backend() is None:
+        print("未发现本机可用的 LibreOffice / Windows Word 转换器；请用 Word/WPS 另存为 DOCX。不自动下载 Office。", file=sys.stderr)
+        return False
+    if extras & {"jpg", "jpeg", "png"} and not local_ocr_status()["ready"]:
+        print("图片入库需要本机 Tesseract 与 chi_sim+eng；未重装 ZSK。安装入口：https://tesseract-ocr.github.io/tessdoc/Installation.html", file=sys.stderr)
+        return False
+    required = {}
+    if "doc" in extras:
+        required["olefile"] = "olefile==0.47"
+    if extras & {"jpg", "jpeg", "png"}:
+        required["PIL"] = "Pillow==12.2.0"
+    missing = [package for module, package in required.items() if importlib.util.find_spec(module) is None]
+    if missing:
+        print(f"只补当前 ZSK Python（{sys.executable}）缺少的解析依赖；不安装第二套 Python。")
+        try:
+            result = subprocess.run((sys.executable, "-m", "pip", "install", "--prefer-binary", *missing),
+                                    capture_output=True, text=True, timeout=600, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            print("解析依赖未就绪；保留已有 ZSK，稍后仅重试依赖。", file=sys.stderr)
+            return False
+        if result.returncode != 0:
+            _print_command_output(result)
+            return False
+        importlib.invalidate_caches()
+    markitdown_formats = tuple(dict.fromkeys(
+        "docx" if kind == "doc" else kind for kind in formats if kind in FORMATS or kind == "doc"))
+    if markitdown_formats and not install_converter(markitdown_formats):
+        return False
+    status = probe_intake_formats(formats)
+    if not all(status.values()):
+        print("实际转换未全部通过：" + "、".join(kind for kind, ready in status.items() if not ready), file=sys.stderr)
+        return False
+    print("本次指定格式已通过实际转换检查；已有依赖已复用。")
     return True
 
 
@@ -340,7 +406,8 @@ def _optional_binary_ready(names: tuple[str, ...], version_args: tuple[str, ...]
     return False
 
 
-def install(source_root: Path, destination: Path) -> int:
+def install(source_root: Path, destination: Path, *, allow_reuse: bool = False) -> int:
+    _configure_console()
     source_errors = validate_source(source_root)
     if source_errors:
         print("安装包不完整，已停止：", file=sys.stderr)
@@ -350,6 +417,9 @@ def install(source_root: Path, destination: Path) -> int:
 
     conflicts = [destination / name for name in COMPONENTS if (destination / name).exists()]
     if conflicts:
+        if allow_reuse and not installed_state(destination)[1] and _same_bundle(source_root, destination):
+            print("已安装相同完整版本的 ZSK；跳过组件复制，仅检查并准备转换依赖。")
+            return 0
         print("发现已有同名目录。为避免覆盖，安装已停止：", file=sys.stderr)
         for conflict in conflicts:
             print(f"- {conflict}", file=sys.stderr)
@@ -361,7 +431,7 @@ def install(source_root: Path, destination: Path) -> int:
     try:
         for name in COMPONENTS:
             target = destination / name
-            shutil.copytree(source_root / name, target)
+            shutil.copytree(source_root / name, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
             created.append(target)
     except Exception as exc:
         for target in reversed(created):
@@ -377,6 +447,24 @@ def install(source_root: Path, destination: Path) -> int:
     return 0
 
 
+def _same_bundle(source_root: Path, destination: Path) -> bool:
+    def files(root: Path) -> dict[str, bytes]:
+        result = {}
+        for path in root.rglob("*"):
+            if "__pycache__" in path.parts or path.suffix in {".pyc", ".pyo"}:
+                continue
+            if path.is_symlink():
+                raise ValueError("component contains a symlink")
+            if path.is_file():
+                result[path.relative_to(root).as_posix()] = path.read_bytes()
+        return result
+    try:
+        return all(not (destination / name).is_symlink() and
+                   files(source_root / name) == files(destination / name) for name in COMPONENTS)
+    except (OSError, ValueError):
+        return False
+
+
 def print_install_success(destination: Path) -> None:
     present, _ = installed_state(destination)
     print(f"安装完成：{destination}")
@@ -385,6 +473,7 @@ def print_install_success(destination: Path) -> None:
 
 
 def main() -> int:
+    _configure_console()
     parser = argparse.ArgumentParser(description="安装完整的 ZSK 知识库 Skill 组合")
     parser.add_argument("--dest", type=Path, help="宿主实际持久 Skills 目录；非 Codex 宿主必须显式提供")
     parser.add_argument("--host", choices=("codex", "workbuddy", "doubao", "other"), default="codex")
@@ -393,7 +482,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="只检查目标目录，不写入")
     parser.add_argument("--doctor", action="store_true", help="检查建库组件；配合 --formats 检查指定格式，不处理客户资料")
     parser.add_argument("--package-check", action="store_true", help="检查当前安装包结构，不写入")
-    parser.add_argument("--install-markitdown", action="store_true", help="安装或补齐 MarkItDown 最小格式依赖")
+    parser.add_argument("--install-markitdown", "--prepare-documents", dest="install_markitdown",
+                        action="store_true", help="同一次任务准备常用 DOCX/PPTX/XLSX/PDF；已通过则不下载")
     args = parser.parse_args()
     modes = (args.check, args.doctor, args.package_check, args.dependencies_only)
     if sum(modes) > 1 or (args.install_markitdown and any(modes)):
@@ -412,12 +502,12 @@ def main() -> int:
         return 0
 
     formats = tuple(dict.fromkeys(part.strip().lower() for part in args.formats.split(","))) if args.formats else ()
-    if any(kind not in FORMATS for kind in formats):
-        parser.error("--formats 仅支持 " + ",".join(FORMATS))
+    if any(kind not in INTAKE_FORMATS for kind in formats):
+        parser.error("--formats 仅支持 " + ",".join(INTAKE_FORMATS))
     if args.dependencies_only:
         if not formats:
             parser.error("--dependencies-only 需要 --formats 指定本次所需格式")
-        return 0 if install_converter(formats) else 6
+        return 0 if prepare_dependencies(formats) else 6
     if args.host != "codex" and args.dest is None:
         parser.error("此宿主需要 --dest 指定已核实的持久 Skills 目录，不默认写入 Codex 目录")
     destination = (args.dest or default_destination()).expanduser().resolve()
@@ -431,13 +521,16 @@ def main() -> int:
     if args.doctor:
         present, missing = installed_state(destination)
         version = converter_version()
-        readiness = probe_formats(formats) if formats else {}
+        readiness = (probe_intake_formats(formats) if set(formats) - set(FORMATS)
+                     else probe_formats(formats)) if formats else {}
         pages = page_evidence_status()
         ocr = local_ocr_status()
         print("组件：" + ("齐全" if not missing else "缺少 " + "、".join(missing)))
         print("MarkItDown：" + (version or "未就绪（不影响建库与 MD/TXT/CSV 入库）"))
         for kind, ready in readiness.items():
-            print(f"{kind} 转换：" + ("通过" if ready else "未通过，需补齐该格式依赖"))
+            print(f"{kind} 转换：" + ("通过" if ready else "未通过，请核对对应依赖、转换工具或 OCR；不要重装整套 ZSK"))
+        backend = legacy_backend()
+        print("旧 DOC 转换工具（仅发现，不代表格式实测通过）：" + (backend[0] if backend else "未发现，可用 Word/WPS 另存为 DOCX"))
         pptx_state = "不可用" if not pages["pptx"] else f"可用（{pages['pptx_engine']}）"
         print("页级证据（可选）：PDF " + ("可用" if pages["pdf"] else "不可用") + "；PPTX " + pptx_state)
         language_text = "+".join(ocr["languages"]) if ocr["languages"] else "无"
@@ -445,17 +538,18 @@ def main() -> int:
         return 0 if not missing and all(readiness.values()) else 1
 
     source_root = Path(__file__).resolve().parent / "skills"
-    result = install(source_root, destination)
+    result = install(source_root, destination, allow_reuse=args.install_markitdown)
     if result != 0:
         return result
     if not args.install_markitdown:
         print_install_success(destination)
+        print("当前仅准备建库。Word/PPT/Excel/PDF 转换能力尚未在本次验证；正式入库前可用 --dependencies-only --formats docx,pptx,xlsx,pdf 一次准备。")
         return 0
-    if not install_converter(formats or ("docx", "pdf", "pptx", "xlsx")):
+    if not prepare_dependencies(formats or ("docx", "pdf", "pptx", "xlsx")):
         print("ZSK 组件已保存，可建库；转换依赖未就绪，富文档入库不可用。用 --dependencies-only --formats 重试。", file=sys.stderr)
         return 6
     print_install_success(destination)
-    print("MarkItDown 已就绪：" + (converter_version() or "未知版本"))
+    print("本次指定的资料转换能力已通过实测。")
     return 0
 
 

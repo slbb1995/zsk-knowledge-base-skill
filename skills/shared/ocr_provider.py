@@ -9,6 +9,7 @@ import platform
 import shutil
 import subprocess
 import tempfile
+import re
 from difflib import SequenceMatcher
 from typing import Protocol, Sequence
 
@@ -85,7 +86,7 @@ class TesseractOcrProvider:
                 raise OcrFailed("local OCR process failed") from exc
         if completed.returncode != 0:
             raise OcrFailed("local OCR returned a failure")
-        words: list[str] = []
+        line_words: dict[tuple[str, ...], list[str]] = {}
         weighted = 0.0
         weight = 0
         lines = completed.stdout.splitlines()
@@ -100,11 +101,11 @@ class TesseractOcrProvider:
                 continue
             if not token or confidence < 0:
                 continue
-            words.append(token)
+            line_words.setdefault(tuple(columns[1:5]), []).append(token)
             token_weight = max(1, len(token))
             weighted += confidence * token_weight
             weight += token_weight
-        text = " ".join(words).strip()
+        text = "\n".join(" ".join(words) for words in line_words.values()).strip()
         score = max(0.0, min(1.0, weighted / weight / 100.0)) if weight else 0.0
         return OcrResult(text, score, self.name)
 
@@ -123,6 +124,7 @@ class AutoOcrProvider:
         providers: Sequence[LocalOcrProvider] | None = None,
         *,
         agreement_threshold: float = 0.92,
+        require_numeric_agreement: bool = False,
     ) -> None:
         if not 0.92 <= agreement_threshold <= 1.0:
             raise ValueError("OCR agreement threshold is invalid")
@@ -130,6 +132,7 @@ class AutoOcrProvider:
         if len(self.providers) < 2:
             raise ValueError("automatic OCR requires at least two local passes")
         self.agreement_threshold = agreement_threshold
+        self.require_numeric_agreement = require_numeric_agreement
 
     def recognize(self, image: bytes) -> OcrResult:
         candidates: list[OcrResult] = []
@@ -148,6 +151,8 @@ class AutoOcrProvider:
         best_score = -1.0
         for index, first in enumerate(ranked):
             for second in ranked[index + 1 :]:
+                if self.require_numeric_agreement and _numeric_tokens(first.text) != _numeric_tokens(second.text):
+                    continue
                 agreement = _text_agreement(first.text, second.text)
                 score = min(first.confidence, second.confidence) * agreement
                 if agreement >= self.agreement_threshold and score > best_score:
@@ -173,6 +178,10 @@ def _text_agreement(first: str, second: str) -> float:
     if not normalized_first or not normalized_second:
         return 0.0
     return SequenceMatcher(a=normalized_first, b=normalized_second).ratio()
+
+
+def _numeric_tokens(text: str) -> tuple[str, ...]:
+    return tuple(re.findall(r"[-+]?\d+(?:[.,]\d+)*", "".join(text.split())))
 
 
 def _tesseract_executable() -> str | None:

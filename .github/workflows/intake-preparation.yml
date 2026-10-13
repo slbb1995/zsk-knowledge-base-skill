@@ -1,0 +1,30 @@
+name: Legacy Word and image intake
+
+on:
+  pull_request:
+    paths:
+      - "install.py"
+      - "skills/shared/**"
+      - "tests/test_legacy_image_intake.py"
+      - "tests/test_install_doctor.py"
+      - ".github/workflows/intake-preparation.yml"
+  workflow_dispatch:
+
+jobs:
+  intake-contract:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install small parsing dependencies
+        run: python -m pip install Pillow==12.2.0 olefile==0.47
+      - name: Verify intake and installer behavior
+        run: |
+          python -B -m unittest discover -s tests -p "test_legacy_image_intake.py" -v
+          python -B -m unittest discover -s tests -p "test_install_doctor.py" -v
+          python -B -m unittest discover -s tests -p "test_host_onboarding.py" -v
