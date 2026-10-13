@@ -107,6 +107,10 @@ python3 tools/verify_content_source_v1.py \
 
 > 请从 https://github.com/slbb1995/zsk-knowledge-base-skill 获取完整 ZSK 项目，先读 README，再安装到当前宿主已核实的持久 Skills 目录，不覆盖同名目录。检查六个 Skill、shared 和口播预置资源完整可加载。先复用宿主已有飞书能力，缺失时按 https://github.com/larksuite/cli 官方说明补齐；豆包已有账号绑定时不要重复安装或登录。现在只准备建库，暂不下载文档转换依赖；首次上传富文档时再检查并补齐所需格式。告诉我是否需要刷新技能或重新打开任务。
 
+上面这段适合只先建库。准备正式入库或课堂实操时，使用这一段，一次把常用文档能力准备好：
+
+> 请从 https://github.com/slbb1995/zsk-knowledge-base-skill 获取完整 ZSK 项目，先读 README，核实当前宿主的持久 Skills 目录和 Python 环境。安装完整组件，并在同一次任务用 --prepare-documents 准备 Word、PPT、Excel、PDF 转换。已有相同完整版本就复用，已有不同版本或修改先说明差异，不覆盖。转换实测通过就跳过下载，只补缺失依赖。复用宿主已有飞书能力和身份，不重复登录。分别报告组件安装、文档转换和宿主加载结果；暂不创建知识库或处理客户资料。
+
 安装后发送：
 
 > 请使用 zsk-router 检查当前是否具备创建知识库的条件，先检查，不要创建。
@@ -158,9 +162,14 @@ python3 zsk-knowledge-base-skill/install.py --doctor --formats docx,pdf
 - 合成文件转换已通过：复用现有程序，零下载。
 - 格式未通过：先核对当前可执行文件确实属于该 pipx 环境，保留当前版本补对应格式；新装使用验证版本。环境不一致则停止并提示，不降级、不另装无效副本。复用 pip/pipx 缓存，不使用 `--force` 或 `markitdown[all]`。
 - 首次安装要提前准备全部 Office/PDF 时，仍可显式用 `--install-markitdown`，也可配 `--formats` 缩小范围。
+- `--prepare-documents` 是同一能力的直观名称，默认准备 DOCX/PDF/PPTX/XLSX；已有相同完整组件可复用，不重复复制，客户改动或版本不同则停止。只装组件时会提醒尚未在本次验证文档转换，不能把 Skill 可见说成程序已就绪。
 - 下载失败：保留已完整安装的 ZSK，明确“可建库，富文档未就绪”，稍后仅重试依赖。
 - `--doctor` 不带格式只检查建库组件完整性；带格式才以实际转换检查对应能力，不再仅凭 `--version` 判定。
 - OCR/页渲染始终是可选增强；完整页证据模式需要另行通过其检查。
+
+旧 `.doc` 与文字型 JPG/JPEG/PNG 接入见 [接入细则](skills/zsk-router/references/legacy-and-image-intake.md)。`--doctor --formats doc,jpg,png` 会使用合成文件实测；`--dependencies-only --formats doc,jpg,png` 只补当前 Python 缺失的 olefile/Pillow 与 MarkItDown 的 DOCX 依赖，不自动下载 Office、Tesseract 或语言包。缺少转换工具时提示 Word/WPS 另存为 DOCX，缺少 OCR 时明确指出缺失能力。
+
+多文件处理先核验唯一知识库绑定，再逐文件返回结果。格式不支持、依赖缺失、旧 Word 工具不可用、转换失败和文字质量不足分别报告；一个文件的预期失败不阻断其他可处理资料。
 
 Windows 安全软件若拦截 CLI，只核实并处理可信程序的具体路径，不要求关闭全部防护。
 
@@ -168,7 +177,8 @@ Windows 安全软件若拦截 CLI，只核实并处理可信程序的具体路�
 
 - 当前默认：MD、TXT、CSV，以及经 MarkItDown 转换的 DOCX、PPTX、XLSX、PDF、HTML、JSON。
 - 当前可选：PDF/PPTX 完整页图、PPT 原生文字、视觉页 300 DPI 多次本地 OCR 严格一致性检查、逐条知识卡原文摘录绑定，以及飞书“脱敏页文字＋高清原页图”的正文/图片数量/尺寸/远端媒体 SHA256 回读。OCR 至少两次高度一致才可继续，部分相似或单次高置信度不会放行；结果写入前再次执行隐私检查。页图需要 `pdftoppm`、`pdfinfo`；本地 OCR Provider 需要 Tesseract 的 `chi_sim` 与 `eng` 语言包。macOS 已安装 Microsoft PowerPoint 时优先使用 PowerPoint 原生导出；首次运行可能出现 macOS 自动化授权提示。没有 PowerPoint 时使用 LibreOffice；PowerPoint 已存在但原生导出失败时停止，不静默降级。
-- 不在当前范围：零散图片入库、音视频、图片向量检索、图片描述、猜测式图文对应、无确认自动发布。
+- 新增接入：旧二进制 DOC 验证并转为 DOCX，再经 MarkItDown；文字型 JPG/JPEG/PNG 保留完整原生分辨率图像证据，经多次本地 OCR 的文字与数字一致性检查后入库。来源 ID 始终取提交原件 SHA256，转换关系与页图另存证据。Pillow/olefile 为按需解析依赖；优先复用已有 LibreOffice，Windows 无此后端时可使用 Word COM。Word COM 仍需客户真实 Windows 环境验收。
+- 不在当前范围：旧 XLS/PPT、音视频、图片向量检索、图片描述、猜测式图文对应、无确认自动发布。
 
 ## 包含的组件
 

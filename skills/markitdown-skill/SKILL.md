@@ -15,6 +15,7 @@ metadata:
 ## ZSK 使用边界
 
 - ZSK 对 DOCX、PPTX、XLSX、PDF、HTML、JSON 的正式可读版只使用 MarkItDown；MD、TXT、CSV 走轻量本地规范化。
+- 旧 DOC 由 ZSK 的本地转换组件先生成 DOCX，再交给 MarkItDown；零散 JPG/PNG 走独立本地 OCR，不调用 MarkItDown 的图片描述功能，也不因此重装此 Skill。
 - 只做本地文字转换，不启用插件、Azure Document Intelligence、外部 URL、图片 OCR、音视频转写或 LLM 图片描述。
 - 转换结果为空、损坏或转换器不可用时，ZSK 只写 02 的安全异常，不保存原件或正文。
 - 不把 Markdown 转换结果直接当业务事实；后续 03、04、05 仍必须走来源、隐私和路由 Gate。
@@ -27,7 +28,7 @@ metadata:
 markitdown document.pdf -o readable.md
 ```
 
-建库和 MD/TXT/CSV 入库不需要下载转换程序。首次富文档入库时按实际格式检查，例如 `python3 install.py --doctor --formats docx,pdf`（非 Codex 宿主须提供实际 `--host`、`--dest`）。只有所需格式未通过才运行：
+建库和 MD/TXT/CSV 入库不需要下载转换程序。正式使用前推荐用 ZSK 安装器的 `--prepare-documents` 一次准备 DOCX/PPTX/XLSX/PDF；之后入库按实际格式检查，例如 `python3 install.py --doctor --formats docx,pdf`（非 Codex 宿主须提供实际 `--host`、`--dest`）。只有所需格式未通过才运行：
 
 ```bash
 python3 install.py --dependencies-only --formats docx,pdf

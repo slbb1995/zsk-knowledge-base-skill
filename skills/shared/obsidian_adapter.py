@@ -22,7 +22,7 @@ from .templates import ROOT_TITLES, root_content, root_object_kind, template_fin
 
 
 _RULE_KEYS = frozenset({"AGENTS", "README"})
-_SAFE_ORIGINAL_SUFFIXES = frozenset({".md", ".txt", ".csv", ".json", ".html", ".htm", ".docx", ".pptx", ".xlsx", ".pdf"})
+_SAFE_ORIGINAL_SUFFIXES = frozenset({".md", ".txt", ".csv", ".json", ".html", ".htm", ".doc", ".docx", ".pptx", ".xlsx", ".pdf", ".jpg", ".jpeg", ".png"})
 _ROOT_NAMES = {key: f"{ROOT_TITLES[key]}.md" if key in _RULE_KEYS else ROOT_TITLES[key] for key in ROOT_KEYS}
 _OBSIDIAN_CONTROL_DIRECTORIES = frozenset({".obsidian"})
 _REPOSITORY_CONTROL_DIRECTORIES = frozenset({".git"})
@@ -522,7 +522,7 @@ class ObsidianAdapter:
         if not isinstance(retained, bool):
             retained = privacy == "passed"
         display = meta.get("display_name") if isinstance(meta.get("display_name"), str) and meta.get("display_name") else source_title
-        content_kind = "presentation" if suffix == ".pptx" else "table" if suffix in {".xlsx", ".csv"} else "document" if suffix in {".pdf", ".docx"} else "text"
+        content_kind = "presentation" if suffix == ".pptx" else "table" if suffix in {".xlsx", ".csv"} else "document" if suffix in {".pdf", ".doc", ".docx"} else "image" if suffix in {".jpg", ".jpeg", ".png"} else "text"
         original_ref = self._existing_ref(f"source_original-{source_id}", "source_original", source_dir, original)
         readable_ref = self._existing_ref(f"source_readable-{source_id}", "source_readable", source_dir, readable)
         record = SourceRecord(

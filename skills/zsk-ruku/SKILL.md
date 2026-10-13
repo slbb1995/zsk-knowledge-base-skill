@@ -11,13 +11,13 @@ description: 通用知识库的来源登记职责。负责来源身份、可读�
 
 ## 统一 Markdown 转换
 
-MD、TXT 原样规范化，CSV 严格转 Markdown 表格；JSON、HTML/HTM、DOCX、PPTX、XLSX、PDF 一律由本机 Microsoft MarkItDown 转为唯一正式 `readable.md`。转换不联网、不调用大模型；MarkItDown 不可运行、输出为空或转换失败时，只写 02 的安全说明，不保存原件或正文。旧版二进制 Office（.doc/.xls/.ppt）、图片、音视频仍准确停止。
+MD、TXT 原样规范化，CSV 严格转 Markdown 表格；JSON、HTML/HTM、DOCX、PPTX、XLSX、PDF 由本机 Microsoft MarkItDown 转为唯一正式可读版。旧 `.doc` 经 `shared.legacy_doc` 验证并转成 DOCX，再经 MarkItDown；提交原件的 SHA256/source_id 不变，中间转换关系写入可读版元数据。JPG/JPEG/PNG 经 `shared.image_input` 保存完整原生分辨率单页证据，复用多次本地 OCR 与隐私检查。细则见 [旧 Word 与图片接入](../zsk-router/references/legacy-and-image-intake.md)。转换不联网、不调用大模型；依赖缺失、转换失败与格式不支持分别报告，只写 02 安全说明，不保存失败来源的原件或正文。`.xls/.ppt`、音视频仍停止。
 
 `source_id` 使用原件 SHA256，只写入可读版元数据；原件保存遵守 06 中客户首次绑定时选择的项目级偏好，完成隐私检查后在 01 create-only 分开保存原件和带来源记录的可读 Markdown。客户可见名称使用“日期＋资料标题”，不使用 `SRC-...` 或哈希串做文件名。可读版必须记录转换器名称和版本。异常只在真实转换、写入或回读故障时写入 02。只返回 `registered / reused / exception`，不要求客户判断 03/04/05。
 
 ## 通用完整页证据
 
-PDF/PPTX 默认不生成页图。只有 Router 明确传入 `page_evidence_mode=required`，且 06 项目偏好或本次确认允许保留原件时才启用。页图不代替 MarkItDown 文本，两者共同进入 01：
+PDF/PPTX 默认不生成页图。只有 Router 明确传入 `page_evidence_mode=required`，且 06 项目偏好或本次确认允许保留原件时才启用。JPG/JPEG/PNG 自动进入单页证据模式，同样遵守原件保存偏好，使用原生分辨率而非渲染 DPI。图片可读版来自通过一致性检查的本地 OCR；PDF/PPTX 页图不代替 MarkItDown 文本，两者共同进入 01：
 
 - 每个来源在私有临时目录中渲染，结束后自动清理临时文件。
 - 使用 PDF 的真实总页数核对完整页集；页码必须从 1 连续到总页数。
@@ -33,4 +33,4 @@ MarkItDown 未实际输出的本地图片占位会被替换为明确说明；完
 
 来源不可读、文件文字质量不足、版本关系冲突、重复来源归属冲突或写后回读失败时，只返回统一原因码和无敏感异常引用，不猜测正文，不静默换客户或后端。`file_quality_insufficient` 不产生任何后端对象；客户只收到重新上传高清 PDF 或原始文件的提示。
 
-敏感原件按 06 中客户首次选择的项目级保存偏好处理；可读版以及 OCR/页文字清单始终自动脱敏。未提交文件不得读取、保存或引用。
+敏感原件按 06 中客户首次选择的项目级保存偏好处理；可读版以及 OCR/页文字清单始终自动脱敏。未提交文件不得读取、保存或引用。批量来源须先验证整批唯一绑定，逐文件保留结果；一个文件的预期失败不终止其他文件。

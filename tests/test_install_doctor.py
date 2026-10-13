@@ -15,6 +15,47 @@ import install  # noqa: E402
 
 
 class InstallDoctorTests(unittest.TestCase):
+    def test_prepare_existing_identical_bundle_does_not_copy_again(self):
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / "skills"
+            self.assertEqual(install.install(ROOT / "skills", destination), 0)
+            before = {p.relative_to(destination).as_posix(): p.read_bytes()
+                      for p in destination.rglob("*") if p.is_file()}
+            with mock.patch.object(sys, "argv", ["install.py", "--dest", str(destination), "--prepare-documents"]), \
+                 mock.patch.object(install, "install_converter", return_value=True) as prepare, \
+                 mock.patch.object(install.shutil, "copytree", side_effect=AssertionError("must reuse")):
+                self.assertEqual(install.main(), 0)
+            prepare.assert_called_once_with(("docx", "pdf", "pptx", "xlsx"))
+            self.assertEqual(before, {p.relative_to(destination).as_posix(): p.read_bytes()
+                                     for p in destination.rglob("*") if p.is_file()})
+
+    def test_modified_installed_skill_stops_before_dependency_preparation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / "skills"
+            self.assertEqual(install.install(ROOT / "skills", destination), 0)
+            path = destination / "zsk-router/SKILL.md"
+            path.write_text(path.read_text() + "\ncustomer edit\n")
+            with mock.patch.object(sys, "argv", ["install.py", "--dest", str(destination), "--prepare-documents"]), \
+                 mock.patch.object(install, "prepare_dependencies") as prepare:
+                self.assertEqual(install.main(), 3)
+            prepare.assert_not_called()
+            self.assertIn("customer edit", path.read_text())
+
+    def test_new_formats_doctor_does_not_install_or_copy_components(self):
+        with mock.patch.object(sys, "argv", ["install.py", "--dest", str(ROOT / "skills"), "--doctor", "--formats", "doc,png"]), \
+             mock.patch.object(install, "probe_intake_formats", return_value={"doc": True, "png": False}), \
+             mock.patch.object(install, "prepare_dependencies") as prepare, \
+             mock.patch.object(install, "install") as copy:
+            self.assertEqual(install.main(), 1)
+        prepare.assert_not_called()
+        copy.assert_not_called()
+
+    def test_missing_image_ocr_does_not_download_or_reinstall(self):
+        with mock.patch.object(install, "local_ocr_status", return_value={"ready": False}), \
+             mock.patch.object(install.subprocess, "run") as run:
+            self.assertFalse(install.prepare_dependencies(("png",)))
+        run.assert_not_called()
+
     def test_incomplete_oral_structure_package_is_not_an_installed_shared(self):
         import shutil
         with tempfile.TemporaryDirectory() as folder:

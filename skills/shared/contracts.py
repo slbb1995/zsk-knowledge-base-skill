@@ -46,6 +46,7 @@ ERROR_CODES = frozenset(
         "source_unreadable",
         "format_unsupported",
         "conversion_failed",
+        "legacy_conversion_unavailable",
         "page_evidence_unavailable",
         "page_evidence_failed",
         "ocr_unavailable",

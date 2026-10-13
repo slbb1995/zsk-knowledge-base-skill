@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import io
 import json
@@ -20,18 +20,22 @@ from .page_renderer import PageRenderFailed, PageRendererUnavailable, RenderedPa
 from .ocr_provider import LocalOcrProvider, OcrFailed, OcrUnavailable
 from .page_text import PageTextFailed, build_page_text_evidence
 from .ocr_review import OcrReviewGate
+from .image_input import IMAGE_SUFFIXES, prepare_image
+from .legacy_doc import LegacyConverterUnavailable, convert_legacy_doc
 
 
-SUPPORTED_SUFFIXES = frozenset({".md", ".txt", ".csv", ".json", ".html", ".htm", ".docx", ".pptx", ".xlsx", ".pdf"})
+SUPPORTED_SUFFIXES = frozenset({".md", ".txt", ".csv", ".json", ".html", ".htm", ".doc", ".docx", ".pptx", ".xlsx", ".pdf"}) | IMAGE_SUFFIXES
 _TABLE_SUFFIXES = frozenset({".csv", ".xlsx"})
 _PHONE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 _EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w.-])")
 _IDENTITY = re.compile(r"(?<!\d)\d{17}[0-9Xx](?!\w)")
 _SENSITIVE = (_PHONE, _EMAIL, _IDENTITY)
 _SAFE_NOTES = {
-    "format_unsupported": "当前版本不支持该格式（或缺少该格式的可选依赖），未保存原件或正文。",
+    "format_unsupported": "当前版本不支持该格式，请提供支持的文件格式；未保存原件或正文。",
+    "dependency_missing": "当前文件格式可接入，但本机转换依赖未就绪；只需补齐该格式依赖，无需重装 ZSK。",
+    "legacy_conversion_unavailable": "本机缺少可用的旧 Word 转换能力，或 Word 正在使用中；请用 Word/WPS 另存为 DOCX，不能只改扩展名。",
     "source_unreadable": "资料为空或无法安全读取，未保存原件或正文。",
-    "conversion_failed": "资料无法按严格规则转换，未保存原件或正文。",
+    "conversion_failed": "资料转换失败；请提供未损坏、未加密的原始文件，未保存原件或正文。",
     "page_evidence_unavailable": "当前电脑缺少可选的完整页证据能力，未保存原件、正文或页图。",
     "page_evidence_failed": "完整页证据生成或校验失败，未报告登记成功。",
     "ocr_unavailable": "当前电脑缺少本地 OCR Provider，图片页未进入知识库。",
@@ -134,6 +138,8 @@ class Stage5Intake:
         digest = hashlib.sha256(request.payload).hexdigest()
         source_id = f"SRC-{digest[:24]}"
         suffix = PurePath(request.file_name).suffix.lower()
+        if suffix in IMAGE_SUFFIXES:
+            request = replace(request, page_evidence_mode="required")
         evidence = self._evidence(request, suffix, source_id)
         ready = self._ready(request.binding, evidence)
         if ready is not None:
@@ -150,16 +156,31 @@ class Stage5Intake:
         if existing is not None:
             return existing
         try:
-            conversion = self._readable(request.payload, suffix)
+            if suffix == ".doc":
+                derived = convert_legacy_doc(request.payload)
+                markdown = convert_to_markdown(derived.payload, ".docx")
+                conversion = replace(markdown, provenance={
+                    "input_format": "doc", "intermediate_format": "docx",
+                    "intermediate_sha256": derived.sha256, "legacy_converter": derived.engine,
+                    "original_sha256": digest,
+                })
+            elif suffix in IMAGE_SUFFIXES:
+                conversion = MarkdownConversion("", "auto-local-ocr", "unreported")
+            else:
+                conversion = self._readable(request.payload, suffix)
+        except LegacyConverterUnavailable:
+            return self._exception(request.binding, source_id, "legacy_conversion_unavailable", evidence)
         except ConverterUnavailable:
-            evidence["format_note"] = "本机缺少可运行的 MarkItDown；未保存原件或正文。"
-            return self._exception(request.binding, source_id, "format_unsupported", evidence)
+            evidence["format_note"] = "格式已支持，本机对应转换依赖未就绪；未保存原件或正文。"
+            return self._exception(request.binding, source_id, "dependency_missing", evidence)
         except (UnicodeError, ConversionFailed):
             return self._exception(request.binding, source_id, "conversion_failed", evidence)
         except (csv.Error, ValueError):
             return self._exception(request.binding, source_id, "source_unreadable", evidence)
         body = conversion.text
         evidence["conversion"] = {"engine": conversion.engine, "version": conversion.version}
+        if conversion.provenance:
+            evidence["conversion"]["provenance"] = dict(conversion.provenance)
         initial_sensitive_count = _sensitive_count(body)
         if initial_sensitive_count and not request.original_retention_approved:
             evidence["privacy"] = {
@@ -178,18 +199,25 @@ class Stage5Intake:
         rendered_pages: tuple[RenderedPage, ...] = ()
         page_engine: str | None = None
         if request.page_evidence_mode == "required":
-            if suffix not in {".pdf", ".pptx"}:
+            if suffix not in {".pdf", ".pptx"} | IMAGE_SUFFIXES:
                 evidence["page_evidence"] = {"mode": "required", "status": "unsupported_format"}
                 return self._exception(request.binding, source_id, "page_evidence_failed", evidence)
             try:
-                with tempfile.TemporaryDirectory(prefix="zsk-page-evidence-") as folder:
-                    rendered = render_page_evidence(request.payload, suffix, source_id, Path(folder), dpi=300)
+                if suffix in IMAGE_SUFFIXES:
+                    rendered = prepare_image(request.payload, suffix, source_id)
+                else:
+                    with tempfile.TemporaryDirectory(prefix="zsk-page-evidence-") as folder:
+                        rendered = render_page_evidence(request.payload, suffix, source_id, Path(folder), dpi=300)
+            except ConverterUnavailable:
+                return self._exception(request.binding, source_id, "dependency_missing", evidence)
             except PageRendererUnavailable:
                 evidence["page_evidence"] = {"mode": "required", "status": "unavailable"}
                 return self._exception(request.binding, source_id, "page_evidence_unavailable", evidence)
             except PageRenderFailed:
                 evidence["page_evidence"] = {"mode": "required", "status": "failed"}
                 return self._exception(request.binding, source_id, "page_evidence_failed", evidence)
+            except ValueError:
+                return self._exception(request.binding, source_id, "source_unreadable", evidence)
             rendered_pages = rendered.pages
             page_engine = rendered.engine
             evidence["page_evidence"] = {
@@ -300,6 +328,12 @@ class Stage5Intake:
         status = "reused" if all(item == "reused" for item in write_statuses) else "registered"
         evidence.update({"status": status, "code": None, "output_ref_ids": [ref.object_id for ref in refs]})
         return IntakeResponse(status, None, source_id, refs, record, evidence)
+
+    def execute_batch(self, requests: tuple[IntakeRequest, ...]) -> tuple[IntakeResponse, ...]:
+        """One stable binding per batch; one file's expected failure won't block another."""
+        if requests and any(item.binding != requests[0].binding for item in requests):
+            raise ValueError("a batch must use exactly one stable knowledge-base binding")
+        return tuple(self.execute(request) for request in requests)
 
     def _reuse_existing_source(self, request: IntakeRequest, source_id: str, digest: str, evidence: dict[str, Any]) -> IntakeResponse | None:
         """新旧 Obsidian 布局均先按原件哈希复用，避免重复转换或误写 02。"""
@@ -414,6 +448,8 @@ class Stage5Intake:
             "page_manifest": [item.as_dict() for item in page_artifacts],
             "page_text_manifest": [item.as_dict() for item in page_text_evidence],
         }
+        if conversion.provenance:
+            fields["conversion_provenance"] = dict(conversion.provenance)
         frontmatter = "\n".join(f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in fields.items())
         return f"---\n{frontmatter}\n---\n\n{body}".encode("utf-8")
 
@@ -471,8 +507,10 @@ class Stage5Intake:
             return "presentation"
         if suffix in _TABLE_SUFFIXES:
             return "table"
-        if suffix in {".pdf", ".docx"}:
+        if suffix in {".pdf", ".doc", ".docx"}:
             return "document"
+        if suffix in IMAGE_SUFFIXES:
+            return "image"
         return "text"
 
     @staticmethod

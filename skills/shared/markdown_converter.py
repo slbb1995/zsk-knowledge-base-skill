@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import os
 from pathlib import Path
@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from typing import Mapping
 
 
 MARKITDOWN_SUFFIXES = frozenset({".docx", ".pptx", ".xlsx", ".pdf", ".html", ".htm", ".json"})
@@ -31,6 +32,7 @@ class MarkdownConversion:
     text: str
     engine: str
     version: str
+    provenance: Mapping[str, str] = field(default_factory=dict)
 
 
 def convert_to_markdown(payload: bytes, suffix: str) -> MarkdownConversion:
@@ -55,7 +57,11 @@ def convert_to_markdown(payload: bytes, suffix: str) -> MarkdownConversion:
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise ConversionFailed("MarkItDown did not complete safely") from exc
-        if completed.returncode != 0 or not output.is_file():
+        if completed.returncode != 0:
+            if "MissingDependencyException" in completed.stderr or "Missing optional dependency" in completed.stderr:
+                raise ConverterUnavailable("MarkItDown lacks the optional dependencies for this format")
+            raise ConversionFailed("MarkItDown conversion failed")
+        if not output.is_file():
             raise ConversionFailed("MarkItDown conversion failed")
         try:
             text = output.read_text(encoding="utf-8")
