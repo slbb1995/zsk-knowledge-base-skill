@@ -14,7 +14,7 @@ use_when:
   - 需要用提问或画面切换重新抓住注意力
 source_verification: "legacy_mapping_only"
 usage_scope: "method_reference_only"
-maturity: "historical_reference"
+maturity: "experimental_reference"
 ---
 
 # 模式中断
@@ -41,3 +41,7 @@ maturity: "historical_reference"
 ## 可以观察什么
 
 可以对照中断点前后的留存变化，也可以先判断中断是否真的带来新信息。画面、选题和投放同时变化时，不急着把结果全部归因给这个机制。
+
+## 在全文设计中的使用
+
+从解释切到对照、实物或问题回指时，应增加新的信息。内容方法只说明作用位置，不默认要求 Writer 输出镜头、音效或剪辑指令。

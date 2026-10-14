@@ -34,7 +34,7 @@ class ReleasePackageTests(unittest.TestCase):
                 archive.extractall(extracted)
             self.assertEqual(install.validate_package(extracted), [])
             preset = load_preset(extracted / "skills" / "shared" / "assets" / "oral-structure-v1")
-            self.assertEqual(len(preset.documents), 22)
+            self.assertEqual(len(preset.documents), 24)
 
     def test_selects_only_installation_files_and_excludes_bytecode(self) -> None:
         tracked = (

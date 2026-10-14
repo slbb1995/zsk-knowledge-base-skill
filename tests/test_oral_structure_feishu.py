@@ -136,7 +136,7 @@ class FeishuPresetTests(unittest.TestCase):
         runner = self.bare_runner()
         runner.apply_title_semantics = True
         receipt = install_feishu_preset(runner, "123", load_preset())
-        self.assertEqual(len(receipt["files"]), 22)
+        self.assertEqual(len(receipt["files"]), 24)
         by_title = {node["title"]: node for node in runner.nodes.values()}
         for document in load_preset().documents:
             self.assertIn(PurePosixPath(document.path).stem, by_title)
@@ -145,7 +145,7 @@ class FeishuPresetTests(unittest.TestCase):
         runner = self.bare_runner()
         runner.normalize_export = True
         receipt = install_feishu_preset(runner, "123", load_preset())
-        self.assertEqual(len(receipt["files"]), 22)
+        self.assertEqual(len(receipt["files"]), 24)
 
     def test_comparison_preserves_link_and_code_meaning(self):
         from shared.oral_structure_install import _markdown_signature
@@ -177,13 +177,13 @@ class FeishuPresetTests(unittest.TestCase):
         preview = bootstrap.execute(request)
         self.assertEqual(preview.status, "confirmation_required", preview.message)
         self.assertEqual(runner.nodes, {})
-        self.assertIn("22", preview.preview["included_content"])
+        self.assertIn("24", preview.preview["included_content"])
         result = bootstrap.execute(BootstrapRequest(TASK_ID, "新建知识库", "feishu", "口播测试库", confirmation=preview.confirmation))
         self.assertEqual(result.status, "created", result.message)
         self.assertEqual(len(result.root_refs), 9)
         preset = load_preset()
         nodes_by_title = {node["title"]: node for node in runner.nodes.values()}
-        self.assertEqual(len(runner.nodes), 9 + 2 + 7 + 22 + 1)
+        self.assertEqual(len(runner.nodes), 9 + 2 + 7 + 24 + 1)
         for relative in (*preset.directories, *(doc.path for doc in preset.documents)):
             path = PurePosixPath(relative)
             title = path.stem if path.suffix == ".md" else path.name
@@ -199,8 +199,8 @@ class FeishuPresetTests(unittest.TestCase):
         self.assertEqual(receipt_node["parent_node_token"], nodes_by_title[ROOT_TITLES["06"]]["node_token"])
         receipt_body = runner.documents[receipt_node["obj_token"]]
         receipt = json.loads(receipt_body.partition("```json\n")[2].partition("\n```")[0])
-        self.assertEqual(receipt["package_version"], "1.0.0")
-        self.assertEqual(len(receipt["files"]), 22)
+        self.assertEqual(receipt["package_version"], "1.1.0")
+        self.assertEqual(len(receipt["files"]), 24)
         before = copy.deepcopy((runner.nodes, runner.documents))
         retry = FirstRunBootstrap(runner=runner).execute(request)
         self.assertEqual(retry.code, "binding_conflict")

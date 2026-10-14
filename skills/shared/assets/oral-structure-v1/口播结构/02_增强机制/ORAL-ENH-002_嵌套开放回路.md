@@ -14,7 +14,7 @@ use_when:
   - 需要分层提出并依次回答问题
 source_verification: "legacy_mapping_only"
 usage_scope: "method_reference_only"
-maturity: "historical_reference"
+maturity: "experimental_reference"
 ---
 
 # 嵌套开放回路
@@ -42,3 +42,7 @@ maturity: "historical_reference"
 ## 常见风险
 
 问题越开越多、故意拖延答案、结尾忘记回收总承诺。
+
+## 在全文设计中的使用
+
+子问题必须服务同一总问题，并有明确回应位置。结尾核对总问题是否说完；不能因想保留悬念，把必要结论拖到下一篇。

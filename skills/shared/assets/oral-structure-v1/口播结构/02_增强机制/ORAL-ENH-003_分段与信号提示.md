@@ -15,7 +15,7 @@ use_when:
   - 需要用口头提示帮助观众跟上
 source_verification: "legacy_mapping_only"
 usage_scope: "method_reference_only"
-maturity: "historical_reference"
+maturity: "experimental_reference"
 ---
 
 # 分段与信号提示
@@ -42,3 +42,7 @@ maturity: "historical_reference"
 ## 可以观察什么
 
 可以观察分段前后的流失、重看和评论中的理解偏差，也可以通过朗读判断路标是否让表达更顺。
+
+## 在全文设计中的使用
+
+路标说清判断顺序，如“先看条件，再比较方案”。已经短而清楚的稿子无需逐段加“第一、第二、第三”。

@@ -15,7 +15,7 @@ use_when:
   - 需要延后揭示关键答案
 source_verification: "legacy_mapping_only"
 usage_scope: "method_reference_only"
-maturity: "historical_reference"
+maturity: "experimental_reference"
 ---
 
 # 信息缺口
@@ -43,3 +43,7 @@ maturity: "historical_reference"
 ## 可以观察什么
 
 可以比较前段留存、第一次兑现位置和观众流失点，也可以直接观察：观众是否愿意继续听，以及答案出现时是否觉得值得。
+
+## 在全文设计中的使用
+
+缺口应与本篇主要问题一致。开头提出一个未知后，正文前段提供有价值的解释，不为了留人持续推迟答案。能直接回答的操作问题，可以直接回答。

@@ -14,7 +14,7 @@ use_when:
   - 需要解释数据或周报意味着什么
 source_verification: "legacy_mapping_only"
 usage_scope: "method_reference_only"
-maturity: "historical_reference"
+maturity: "experimental_reference"
 ---
 
 # 一个结论多个证据
@@ -66,3 +66,11 @@ maturity: "historical_reference"
 - 先堆信息，最后才给结论。
 - 用三个不同主题凑“三个证据”。
 - 把作者自报当平台核验数据。
+
+## 与切入角度结合
+
+标杆、反差或历史变化可以提出值得解释的问题。先判断现有证据能支持多强的结论，再组织每条事实及其含义。不能先定一个极端标题，再用不相干材料凑证据。结尾明确结论范围及对读者的意义。本页为实验性参考，采用需明确实验授权，不表示已验证效果。
+
+## 材料不足与方向边界
+
+占位、换结构或换主题仅用于批准前的内部设计。正式正文不留占位符，不虚构经历、案例和数据；获批后若缺口使核心承诺无法兑现，交回入口保留当前任务并说明恢复路径，不由 Writer 静默换题。

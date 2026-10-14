@@ -82,13 +82,13 @@ class NewVaultPresetTests(unittest.TestCase):
             self.assertEqual(created.status, "created", created.message)
             vault = parent / "测试库"
             files = sorted((vault / "04-内容方法库" / "口播结构").rglob("*.md"))
-            self.assertEqual(len(files), 22)
+            self.assertEqual(len(files), 24)
             from shared.oral_structure_preset import load_preset
             for document in load_preset().documents:
                 self.assertEqual((vault / "04-内容方法库" / document.path).read_bytes(), document.content.encode("utf-8"))
             receipt = json.loads((vault / "06-Agent与Workflow" / "oral-structure-installation.json").read_text(encoding="utf-8"))
             self.assertEqual(receipt["package_version"], preview.preview["preset_version"])
-            self.assertEqual(len(receipt["files"]), 22)
+            self.assertEqual(len(receipt["files"]), 24)
             for item in receipt["files"]:
                 payload = (vault / item["object_ref"]).read_bytes()
                 self.assertEqual(hashlib.sha256(payload).hexdigest(), item["installed_sha256"])
@@ -126,7 +126,7 @@ class PresetPackageTests(unittest.TestCase):
         receipt = preset.receipt("feishu", objects)
         for document, item in zip(preset.documents, receipt["files"]):
             self.assertIn("asset_id:", item["source_frontmatter"])
-            self.assertIn("legacy_mapping_only", item["source_frontmatter"])
+            self.assertIn("editorial_synthesis" if "ORAL-GUIDE-" in document.frontmatter else "legacy_mapping_only", item["source_frontmatter"])
             self.assertIn(item["source_frontmatter"], document.content)
 
     def test_crlf_checkout_has_same_package_digest(self):
@@ -159,16 +159,16 @@ fields = dict(task_id="01a01e29-a6ba-73a2-82e6-4ad1caa0f33b", user_input="创建
 preview = bootstrap.execute(BootstrapRequest(**fields))
 result = bootstrap.execute(BootstrapRequest(**fields, confirmation=preview.confirmation))
 assert result.status == "created", result.message
-assert len(list((Path(result.locator) / "04-内容方法库" / "口播结构").rglob("*.md"))) == 22
+assert len(list((Path(result.locator) / "04-内容方法库" / "口播结构").rglob("*.md"))) == 24
 assert Path(sys.modules["shared.stage11_bootstrap"].__file__).is_relative_to(Path(sys.argv[1]))
-print("installed runtime: 22 documents verified")
+print("installed runtime: 24 documents verified")
 '''
             completed = subprocess.run(
                 (sys.executable, "-X", "utf8", "-I", "-c", script, str(destination), str(temporary)),
                 cwd=temporary, capture_output=True, text=True, encoding="utf-8", timeout=30,
             )
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-            self.assertIn("22 documents verified", completed.stdout)
+            self.assertIn("24 documents verified", completed.stdout)
 
     def test_symlinked_target_is_rejected(self):
         from shared.oral_structure_preset import load_preset, PresetError
@@ -190,11 +190,11 @@ print("installed runtime: 22 documents verified")
     def test_package_contains_resolvable_cards_and_preserves_source_status(self):
         from shared.oral_structure_preset import load_preset, feishu_markdown
         preset = load_preset()
-        self.assertEqual(len(preset.documents), 22)
+        self.assertEqual(len(preset.documents), 24)
         self.assertEqual(len(preset.directories), 7)
         urls = {Path(doc.path).stem: f"https://feishu.cn/wiki/n{index}" for index, doc in enumerate(preset.documents)}
         for doc in preset.documents:
-            self.assertIn('source_verification: "legacy_mapping_only"', doc.content)
+            self.assertIn('source_verification: "editorial_synthesis"' if 'ORAL-GUIDE-' in doc.frontmatter else 'source_verification: "legacy_mapping_only"', doc.content)
             rendered = feishu_markdown(doc, urls)
             self.assertNotIn("[[", rendered)
             self.assertFalse(rendered.startswith("---"))

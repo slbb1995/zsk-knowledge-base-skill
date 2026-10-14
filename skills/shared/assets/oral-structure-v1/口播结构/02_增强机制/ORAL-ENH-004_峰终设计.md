@@ -14,7 +14,7 @@ use_when:
   - 需要强化最重要观点和结尾感受
 source_verification: "legacy_mapping_only"
 usage_scope: "method_reference_only"
-maturity: "historical_reference"
+maturity: "experimental_reference"
 ---
 
 # 峰终设计
@@ -34,3 +34,7 @@ maturity: "historical_reference"
 ## 可以观察什么
 
 可以结合留存峰值、重看点和结尾到达率观察，也可以回听：价值高点是否真的清楚，结尾是否留下了核心判断。
+
+## 在全文设计中的使用
+
+结尾的首要任务是完成本篇，不是强行升华。若仍缺结论、条件或结果验证，应先补齐内容；一句记忆句不能替代它。

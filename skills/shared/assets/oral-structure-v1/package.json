@@ -1,97 +1,114 @@
 {
   "schema_version": "zsk-oral-structure-package-v1",
   "package_id": "oral-structure",
-  "package_version": "1.0.0",
+  "package_version": "1.1.0",
   "source_archive_sha256": "5e175a447c6eb86d333e9e78d7cea148e42b082f8211d6d8eba11541cadd404c",
-  "source_provenance": "user_supplied_method_reference; legacy source_ids are not client source registrations",
+  "source_provenance": "original archive retained as historical provenance; 1.1.0 adds approved editorial synthesis and updates method guidance, not client source registrations",
   "files": [
     {
       "path": "口播结构/00_方法论/00_口播结构总方法论.md",
-      "sha256": "96d72280494be17077bddb3feccac369e8ffcc04e92709b59d44285037449cfb"
+      "sha256": "d70fd78979271552835fc00686f7173621d49f3ff6cc96fc4bfad17e7a2c14b5"
     },
     {
       "path": "口播结构/00_方法论/01_七个功能锚点.md",
-      "sha256": "05e4954fcc4f84eb7400282787530901d8d8f068a5a389c9ac5738834356238a"
+      "sha256": "9f118a786d3afbf599cd71ede5182915e92a4d0bf5c0b04e2f191ad20828f978"
     },
     {
       "path": "口播结构/00_方法论/02_结构选择矩阵.md",
-      "sha256": "62a2e0b50ea63729be85ab9dc153b1a58f854825732cecfbd6f6617e84149ad7"
+      "sha256": "ac963a1ab5244b6bc096628fcc56eed26fd012000ae797505005c71c9414f3b7"
+    },
+    {
+      "path": "口播结构/00_方法论/06_从选题到全文_角度与结构使用指引.md",
+      "sha256": "6fb1f4262ba689a78581041ab6931332fed194cff0244ef69d169cb9a9204c10"
+    },
+    {
+      "path": "口播结构/00_方法论/07_八种切入角度及组合示例.md",
+      "sha256": "7c508b04c68408879ab28697034697c5aee9aad2c436d5ecd554c2a53cdf50a1"
     },
     {
       "path": "口播结构/00_结构索引与AI调用规则.md",
-      "sha256": "d74048f138fea8f2a67697d6bac532fc8d3ded089b7e7f5cec4619b26b5a561e"
+      "sha256": "7376d4bec168bb3d54ca7aa648e043339096e8da186f05ed2df41985040a5b0e"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-001_痛点镜像与反常识解法.md",
-      "sha256": "43567ef488950f8c4037ec6330512cb4ba12e38416e1b80d561f0d02dc829bb1"
+      "sha256": "e4addf961c09c3c89c49dc08f6e541407cb14f870b96d4ada7e04fce067883ab"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-002_教程拆步与结果兑现.md",
-      "sha256": "bd9da664e3905172784cb3019b3f8f6393a7443e3b7ff4818da3f38394527201"
+      "sha256": "d768c89c125027dc500dc5bf3e156363815b9d309a6599146c5937c46ccde307"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-003_经历反转与方法提炼.md",
-      "sha256": "ae89ee4aa2ad9f97d5896c17624919b36afe27ad4d4c1bb07ef4849214a166af"
+      "sha256": "876d1857ee2e67cddf984fdc9720bb1e36cb67d212ad0758702fa58f63b483a9"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-004_诊断纠偏.md",
-      "sha256": "bdd8901ed9a6c294206cd3b223fc52c27352af6a8cdf0bd0b0fdef59ba38004b"
+      "sha256": "8a00c1565296f710a83d20fbb0916d65150d4674ec2811cc04381c34e971685d"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-005_产品教程与轻转化.md",
-      "sha256": "496da5c27dc25a09bc235be50e1c8737dbbec7d167f380e34192a2b9d6d8fc47"
+      "sha256": "30d8daed76dcf8e339b72758f1fa4db86f7e0c29dc1904efb98c5c1ba778f4ff"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-006_类比观点快打.md",
-      "sha256": "ce041fd2d4aefd8fb0870d2a6bbb54ecfadb4b3b04778e5153e133a263a49a45"
+      "sha256": "c1414d67a1823a8d778edf28533e9d0022279942b53bfa89b361ab21fe250975"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-007_一个结论多个证据.md",
-      "sha256": "bc720f9a47657e1e72b45847a8395280bec1dfe057c43d2a2519a84f55955eea"
+      "sha256": "a5e43ae592c5856245fb46551d6479f882a040fbc62376010a49e5259c23e575"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-008_对比决策.md",
-      "sha256": "9db196f40015a649cce89ced872edc26bf3e3e5855b858ce205b7c7b99c6c372"
+      "sha256": "fb9eec52aae5953180723c02222910aa99cc07467bc08c1090ddce399a5ad0f7"
     },
     {
       "path": "口播结构/01_基础结构/ORAL-STR-009_客户案例证明.md",
-      "sha256": "fc73f4fb339ee9a92532df5997b797e61ba0aa29774277519482b2c8b891ed4d"
+      "sha256": "243efdbc62e95a38a4e217dc1072a28a1bd777cac60b648ec147a48e518dfbc6"
     },
     {
       "path": "口播结构/02_增强机制/ORAL-ENH-001_信息缺口.md",
-      "sha256": "e692cb1eff28adcf024974be1ff2b543eb1f10bfd4fa019d38609f9169678a16"
+      "sha256": "78c9d59ea9c436477488ab8b95a7bd807bd6303172c7d5e96e3bc21c2f65014c"
     },
     {
       "path": "口播结构/02_增强机制/ORAL-ENH-002_嵌套开放回路.md",
-      "sha256": "0134eacded9a785b92044e898ca4b0b6e799c0047509389205ab6ef6068d9de2"
+      "sha256": "6992b0abd9d7514438118a7239fe2cc9202e17178abf78deee3bd4d22a4ba4f4"
     },
     {
       "path": "口播结构/02_增强机制/ORAL-ENH-003_分段与信号提示.md",
-      "sha256": "0471912b0beada4f6e8f43e2e1aba9639921833aac71414ffd4716e6866578a6"
+      "sha256": "2891a26b227672d0afe468c87947947ad0fdeb3c40e26650af5dc48b5ba78a63"
     },
     {
       "path": "口播结构/02_增强机制/ORAL-ENH-004_峰终设计.md",
-      "sha256": "dc7ce152c42a5ef9a4e8cc4ed7e9346b2197451085be9d7a2236f1ae8bf481b2"
+      "sha256": "db0cfe26c118ec0e59a7bfd9333e65986fd319ed31925bc65bc36ffd5af59c80"
     },
     {
       "path": "口播结构/02_增强机制/ORAL-ENH-005_模式中断.md",
-      "sha256": "f9ac181403f74d4f46b1ac7ad1d96522032e83b30ac18cf902c475a83d7dafcc"
+      "sha256": "ec1eff5dfac22c608640ae3832d94c0430849b3742c9c772cff0909b16021396"
     },
     {
       "path": "口播结构/03_平台与时长适配/03_时长伸缩规则.md",
-      "sha256": "2c12a336e052797642c84ace0781c4e3fac3818b400160dbc36d822acc3007d7"
+      "sha256": "e9a831403f7e952448c04c27cf091c36aa6cad28ad00df96c7fe807f8753683a"
     },
     {
       "path": "口播结构/04_验证与反馈/04_证据等级与状态规则.md",
-      "sha256": "9e1967259029dac6db8a9f47707569c3fed886c8266ec8f5108b074938a2b2e4"
+      "sha256": "4fc6884d7339be0f94cf481e1bcc4d7ce9e74833dccad9dc1ca9e19407ceb647"
     },
     {
       "path": "口播结构/04_验证与反馈/05_发布验证与反馈回写规则.md",
-      "sha256": "3c8af818e4fcfbbedc6808a7a74f31e6f03e24c14367d3aebec134864a1ae71c"
+      "sha256": "92c8ebd3cb550d3f56049599d357aa8d9af20728382dcda6f4cc8eeb08fd3670"
     },
     {
       "path": "口播结构/99_待验证/ORAL-STR-B01_挑战记录.md",
       "sha256": "6583e0631aae908a365090a926e5864baceea449d81745426542af1dbb105847"
+    }
+  ],
+  "editorial_sources": [
+    {
+      "source_id": "ORAL-DESIGN-20261014",
+      "source_kind": "user_supplied_prompt_and_approved_editorial_draft",
+      "prompt_sha256": "55b92d17000c7c455fdf5c058816324267a6ef212589dd636fe89ba06edc56e1",
+      "approved_draft_sha256": "36eab8ed3011df29447b05e6fcf7901ecbac7c8c8d1ebfeca11c14eabb1c89bb",
+      "effectiveness": "not_validated"
     }
   ]
 }
